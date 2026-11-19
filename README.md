@@ -154,16 +154,22 @@ C — поріг або math-вираз Grafana. Опис посилається
 | `datakom-mains-fail` | `genset_flag{flag="mains_fail"}` = 1 | 1m | critical |
 | `datakom-engine-running` | `genset_flag{flag="engine_running"}` = 1 | 0 | warning |
 | `datakom-genset-on-load` | `genset_flag{flag="genset_contactor"}` = 1 | 0 | warning |
-| `datakom-mains-voltage` | фаза мережі > 0 і поза 172.5–264.5 В (230 В −25 %/+15 %) | 1m | warning |
-| `datakom-controller-alarm` | `genset_alarm_active` = 1, окремий алерт на кожну аварію з її назвою | 0 | warning для `class="warning"`, інакше critical |
+| `datakom-controller-alarm` | `genset_alarm_active` = 1, окремий алерт на кожну аварію з її назвою — **призупинене за замовчуванням** | 0 | warning для `class="warning"`, інакше critical |
 | `datakom-not-in-auto` | `genset_flag{flag="not_in_auto"}` = 1 (AMF не спрацює) | 15m | warning |
 | `datakom-battery` | батарея поза 11.9–14.8 В | 10m | warning |
 | `datakom-fuel-low` | паливо < 25 % | 10m | warning |
-| `datakom-service-due` | `genset_service_hours_to` < 10 год | 0 | warning |
+| `datakom-service-due` | `genset_service_hours_to{service="1"}` < 10 год (лише сервіс 1, як на дешборді) — **призупинене за замовчуванням** | 0 | warning |
 | `datakom-exporter-down` | `up{job="datakom-exporter"}` = 0 або немає даних | 5m | critical |
 | `datakom-controller-unreachable` | `genset_modbus_up` = 0 | 5m | critical |
 
-Пороги напруги мережі й батареї збігаються з порогами панелей дешборди.
+Поріг батареї збігається з порогом панелі дешборди. Окремого правила на напругу мережі немає:
+стан мережі визначає контролер (`datakom-mains-fail`), а саму напругу моніторять інші системи.
+
+Призупинені за замовчуванням (`"isPaused": true` у JSON, відновлюються в UI):
+- `datakom-controller-alarm` — дублює `datakom-fuel-low` (аварія контролера "Low Fuel Level",
+  біт 58). Поки воно призупинене, **аварії shutdown / loaddump та інші попередження контролера
+  в Telegram не приходять** — їх видно лише на панелі "Alarms" дешборди.
+- `datakom-service-due` — нагадування про сервіс.
 
 Завантаження в Grafana (створює або замінює всю групу; потрібен токен service account з правом
 на provisioning алертів):
@@ -171,7 +177,8 @@ C — поріг або math-вираз Grafana. Опис посилається
 ```sh
 GRAFANA_URL=https://<grafana-url> GRAFANA_TOKEN=<token> python3 alerts/upload.py
 python3 alerts/upload.py --dry-run     # показати тіло запиту
-python3 alerts/upload.py --paused ...  # завантажити призупиненими (до введення в експлуатацію)
+python3 alerts/upload.py --paused ...  # завантажити всі призупиненими (до введення в експлуатацію)
+# правила з "isPaused": true у JSON призупиняються завжди (окремим запитом на правило)
 ```
 
 Правила завантажуються з `X-Disable-Provenance`, тож їх можна призупиняти в UI; джерело правди —
@@ -201,12 +208,6 @@ groups:
         expr: genset_flag{flag="genset_contactor"} == 1
         labels: {group: power, severity: warning}
         annotations: {summary: "Genset is on load"}
-      - alert: MainsVoltageOutOfRange
-        expr: genset_voltage_ln_volts{source="mains"} > 0
-          and (genset_voltage_ln_volts{source="mains"} < 172.5 or genset_voltage_ln_volts{source="mains"} > 264.5)
-        for: 1m
-        labels: {group: power, severity: warning}
-        annotations: {summary: "Mains {{ $labels.phase }} = {{ $value }} V"}
       - alert: GensetControllerAlarm
         expr: genset_alarm_active{class=~"shutdown|loaddump"} == 1
         labels: {group: power, severity: critical}
@@ -225,13 +226,13 @@ groups:
         for: 10m
         labels: {group: power, severity: warning}
         annotations: {summary: "Battery = {{ $value }} V"}
-      - alert: GensetFuelLow
+      - alert: GensetFuelLow          # аварія контролера "Low Fuel Level" (біт 58) дублює це правило
         expr: genset_fuel_level_percent < 25
         for: 10m
         labels: {group: power, severity: warning}
         annotations: {summary: "Fuel level {{ $value }} %"}
       - alert: GensetServiceDue
-        expr: genset_service_hours_to < 10
+        expr: genset_service_hours_to{service="1"} < 10   # лише сервіс 1
         labels: {group: power, severity: warning}
         annotations: {summary: "Service {{ $labels.service }} due in {{ $value }} h"}
       - alert: DatakomExporterDown

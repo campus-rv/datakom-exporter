@@ -48,6 +48,8 @@ DATAKOM_LIVE_HOST=<ip> .venv/bin/pytest -m live -v -s   # лише з досту
   divisor у `registers.py`), а не Grafana. Перевіряє `test_dashboard_query_is_plain_exporter_metric`.
 - Алерти — `alerts/generator-alerts.json` (Grafana-managed, завантаження `alerts/upload.py`):
   запит A — простий селектор, як у дешборді; пороги — у виразах Grafana (B reduce, C threshold/math).
+  Додаткові запити-умови — лише `max by (instance, job) (<селектор>)`,
+  щоб Grafana могла з'єднати їх із серіями A за підмножиною міток.
   Пороги, що є і на панелях, змінювати разом. Перевіряє `tests/test_alerts.py`. Приклад для
   Prometheus Alertmanager у README тримати синхронним з JSON.
 - Фікстури: синтетичні — `tests/fixtures/*.json` (поле `source`), дампи справжніх контролерів —

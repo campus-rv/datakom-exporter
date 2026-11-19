@@ -41,6 +41,24 @@ def _selector(rule):
     return m.group(1), tuple(sorted(MATCHER.findall(m.group(2) or "")))
 
 
+# Extra (gating) queries may only drop labels, so Grafana can join them with query A
+# (its labels must be a subset of A's); the value itself stays a plain exporter metric.
+HELPER = re.compile(r"max by \(instance, job\) \((.+)\)")
+
+
+def _helpers(rule):
+    out = []
+    for q in rule["data"]:
+        if q["refId"] != "A" and q["datasourceUid"] == "prometheus":
+            m = HELPER.fullmatch(q["model"]["expr"].strip())
+            assert m, f"{rule['uid']}/{q['refId']}: {q['model']['expr']!r} - only " \
+                      "'max by (instance, job) (<plain selector>)' is allowed"
+            sel = PLAIN_SELECTOR.fullmatch(m.group(1))
+            assert sel, f"{rule['uid']}/{q['refId']}: inner query is not a plain selector"
+            out.append((sel.group(1), tuple(sorted(MATCHER.findall(sel.group(2) or "")))))
+    return out
+
+
 def test_rule_uids_and_titles_unique():
     assert len({r["uid"] for r in RULES}) == len(RULES)
     assert len({r["title"] for r in RULES}) == len(RULES)
@@ -68,18 +86,18 @@ def test_rule_links_to_existing_dashboard_panel(rule):
 @pytest.mark.parametrize("rule", [r for r in RULES if _query(r, "A")["model"]["expr"] != EXPORTER_UP],
                          ids=lambda r: r["uid"])
 def test_rule_query_has_data_with_default_groups(rule, make_controller, make_collector):
-    name, matchers = _selector(rule)
-    for key, op, value in matchers:
-        if name == "genset_flag" and key == "flag":
-            assert op == "=" and value in FUNCTION_FLAGS.values(), value
     sim = make_controller(fixture_words(load_fixture(ALARM_FIXTURE)))
     col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS)
     reg = CollectorRegistry()
     reg.register(col)
     samples = [s for fam in text_string_to_metric_families(generate_latest(reg).decode())
                for s in fam.samples]
-    assert any(s.name == name and _matches(s.labels, matchers) for s in samples), (
-        f"{rule['uid']}: no sample for {name}{matchers}")
+    for name, matchers in [_selector(rule), *_helpers(rule)]:
+        for key, op, value in matchers:
+            if name == "genset_flag" and key == "flag":
+                assert op == "=" and value in FUNCTION_FLAGS.values(), value
+        assert any(s.name == name and _matches(s.labels, matchers) for s in samples), (
+            f"{rule['uid']}: no sample for {name}{matchers}")
 
 
 def test_upload_body():
@@ -93,7 +111,14 @@ def test_upload_body():
     assert name == body["title"] == "Generator (datakom-exporter)"
     assert body["interval"] == 60 and body["folderUid"] == "f1"
     assert all(r["folderUID"] == "f1" and r["ruleGroup"] == name and r["isPaused"] for r in body["rules"])
-    assert not any(r["isPaused"] for r in doc["groups"][0]["rules"])  # source not mutated
+    # source not mutated
+    assert [r["uid"] for r in doc["groups"][0]["rules"] if r["isPaused"]] == PAUSED_BY_DEFAULT
+    _, body = upload.rule_group_body(doc, "f1")
+    assert [r["uid"] for r in body["rules"] if r["isPaused"]] == PAUSED_BY_DEFAULT
+
+
+# controller-alarm duplicates fuel-low (controller "Low Fuel Level", bit 58); service-due on request
+PAUSED_BY_DEFAULT = ["datakom-controller-alarm", "datakom-service-due"]
 
 
 def test_only_the_exporter_health_rule_uses_a_non_exporter_metric():

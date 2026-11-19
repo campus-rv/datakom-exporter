@@ -184,8 +184,7 @@ D-509 має кнопки MAN і RUN (як D-500), тож коди режимі�
 5. Імпортувати `dashboards/generator.json` у Grafana — створиться окрема дешборда
    "Generator (datakom-exporter)", uid `21ec9aa7-edb0-4f77-87be-d054eb9f0b39`; стара "Generator"
    лишається без змін, поки нова не перевірена.
-6. Алерти: `genset_modbus_up == 0`, `genset_alarms{class="shutdown"} > 0`, низька батарея, рівень палива,
-   AMF-алерти з README (аварія мережі, не в AUTO, мережа впала без переходу на генератор).
+6. Алерти — `alerts/generator-alerts.json`, див. README.
 
 ## Джерела
 - D-300 MK3 manual: https://www.datakom.kiev.ua/upload/iblock/82b/ekw5lw16fd2umifynmty46v5c1az9lyq/DATAKOM-300_MK3-User-Manual-v90.pdf

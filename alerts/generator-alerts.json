@@ -254,78 +254,6 @@
           "isPaused": false
         },
         {
-          "uid": "datakom-mains-voltage",
-          "title": "Mains voltage out of range",
-          "condition": "C",
-          "data": [
-            {
-              "refId": "A",
-              "relativeTimeRange": {
-                "from": 600,
-                "to": 0
-              },
-              "datasourceUid": "prometheus",
-              "model": {
-                "refId": "A",
-                "expr": "genset_voltage_ln_volts{source=\"mains\"}",
-                "instant": true,
-                "range": false,
-                "editorMode": "code",
-                "legendFormat": "__auto"
-              }
-            },
-            {
-              "refId": "B",
-              "relativeTimeRange": {
-                "from": 0,
-                "to": 0
-              },
-              "datasourceUid": "__expr__",
-              "model": {
-                "refId": "B",
-                "type": "reduce",
-                "expression": "A",
-                "reducer": "last",
-                "datasource": {
-                  "type": "__expr__",
-                  "uid": "__expr__"
-                }
-              }
-            },
-            {
-              "refId": "C",
-              "relativeTimeRange": {
-                "from": 0,
-                "to": 0
-              },
-              "datasourceUid": "__expr__",
-              "model": {
-                "refId": "C",
-                "type": "math",
-                "expression": "$B > 0 && ($B < 172.5 || $B > 264.5)",
-                "datasource": {
-                  "type": "__expr__",
-                  "uid": "__expr__"
-                }
-              }
-            }
-          ],
-          "noDataState": "OK",
-          "execErrState": "Error",
-          "for": "1m",
-          "annotations": {
-            "summary": "Mains voltage {{ $labels.phase }} out of range",
-            "description": "Mains {{ $labels.phase }} = {{ humanize $values.B.Value }} V (allowed 172.5..264.5 V, 230 V -25%/+15%).",
-            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
-            "__panelId__": "11"
-          },
-          "labels": {
-            "group": "power",
-            "severity": "warning"
-          },
-          "isPaused": false
-        },
-        {
           "uid": "datakom-controller-alarm",
           "title": "Controller alarm",
           "condition": "C",
@@ -405,7 +333,7 @@
             "group": "power",
             "severity": "{{ if eq $labels.class \"warning\" }}warning{{ else }}critical{{ end }}"
           },
-          "isPaused": false
+          "isPaused": true
         },
         {
           "uid": "datakom-not-in-auto",
@@ -668,7 +596,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "genset_service_hours_to",
+                "expr": "genset_service_hours_to{service=\"1\"}",
                 "instant": true,
                 "range": false,
                 "editorMode": "code",
@@ -734,7 +662,7 @@
             "group": "power",
             "severity": "warning"
           },
-          "isPaused": false
+          "isPaused": true
         },
         {
           "uid": "datakom-exporter-down",

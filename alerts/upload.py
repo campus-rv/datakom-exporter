@@ -78,7 +78,13 @@ def main(argv=None) -> None:
     name, body = rule_group_body(doc, uid, args.paused)
     _request(f"{base}/api/v1/provisioning/folder/{uid}/rule-groups/{urllib.parse.quote(name)}",
              token, "PUT", body)
-    print(f"uploaded {len(body['rules'])} rules to group {name!r}{' (paused)' if args.paused else ''}")
+    # the rule-group endpoint did not apply isPaused on Grafana 11.6; set it per rule as well
+    paused = [r for r in body["rules"] if r.get("isPaused")]
+    for rule in paused:
+        _request(f"{base}/api/v1/provisioning/alert-rules/{urllib.parse.quote(rule['uid'])}",
+                 token, "PUT", rule)
+    print(f"uploaded {len(body['rules'])} rules to group {name!r}; paused: "
+          + (", ".join(r["uid"] for r in paused) or "none"))
 
 
 if __name__ == "__main__":
