@@ -1,0 +1,52 @@
+[Unit]
+Description=Prometheus exporter for Datakom genset controller (Modbus TCP)
+Documentation=file:///opt/datakom-exporter/README.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/datakom-exporter
+ExecStart=/opt/datakom-exporter/venv/bin/datakom-exporter serve
+Restart=always
+RestartSec=5
+
+# --- keep the SD card quiet --------------------------------------------------------------
+# Bytecode is compiled once at install time; never write __pycache__ at runtime.
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+# The exporter logs only start-up and controller up/down transitions (WARNING level);
+# cap bursts anyway (e.g. DATAKOM_LOG_LEVEL=DEBUG left on by mistake).
+LogRateLimitIntervalSec=1min
+LogRateLimitBurst=20
+# No state, cache, log or runtime directories: the whole filesystem is read-only for
+# the service (the exporter never writes files; the private /tmp stays unused).
+DynamicUser=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+# --- hardening ---------------------------------------------------------------------------
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+UMask=0077
+MemoryMax=96M
+
+[Install]
+WantedBy=multi-user.target

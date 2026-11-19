@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datakom-exporter"
+dynamic = ["version"]
+description = "Prometheus exporter for Datakom D-300/D-500/D-700 MK3 genset controllers (Modbus TCP)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pymodbus>=3.0",
+    "prometheus_client>=0.12",
+]
+
+[project.optional-dependencies]
+# the test Modbus server uses the SimDevice/SimData API of recent pymodbus
+test = ["pytest>=7", "pymodbus>=3.12"]
+
+[project.scripts]
+datakom-exporter = "datakom_exporter.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "datakom_exporter.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = [
+    "live: talks to a real controller; needs DATAKOM_LIVE_HOST (run with: pytest -m live)",
+]
+filterwarnings = [
+    # pymodbus 3.x announces the v4 datastore rework on import
+    "ignore::DeprecationWarning:pymodbus.*",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py39"

@@ -99,8 +99,9 @@ D-509 має кнопки MAN і RUN (як D-500), тож коди режимі�
 | 8193 (W) | Емуляція кнопок | 16 | — |
 | 8210 (W) | Hard reset (14536) — НЕ чіпати | 16 | — |
 
-## Новий скрипт: `datakom_d509_exporter.py`
-Вже написаний (див. файл поруч). Протестований лише на симуляторі, не на залізі.
+## Проміжний textfile-скрипт: `legacy/datakom_d500_exporter.py`
+Попередник нинішнього експортера (D-509-варіант відрізнявся лише міткою `controller` і текстами,
+тому не збережений). Протестований лише на симуляторі, не на залізі.
 - Налаштування вгорі: `HOST`, `PORT`, `UNIT_ID`, `OUT_FILE` (за замовчуванням `genset.prom`),
   `CONTROLLER`, `WORD_ORDER` (`low_first` | `high_first`), `EMIT_LEGACY`.
 - `--probe` — ID контролера, версії, сирі 32-бітні пари, автовизначення порядку слів.
@@ -112,16 +113,33 @@ D-509 має кнопки MAN і RUN (як D-500), тож коди режимі�
   щоб дашборд "Generator" працював без змін.
 - Атомарний запис (tmp + rename). Сумісний з pymodbus 3.0–3.8 (`slave=`) і 3.9+ (`device_id=`).
 
+## Новий експортер (2026-11-19): `src/datakom_exporter`
+Замінює textfile-скрипти з `legacy/` (вони лишаються для історії). Prometheus скрейпить його
+напряму (порт 9725), systemd-сервіс на Raspberry Pi, нічого не пише на ФС, тільки FC03.
+- Метрики `genset_*` масштабовані; legacy `gen_*` **не віддаються** — дешборду "Generator"
+  буде переведено на нові метрики (таблиця заміни запитів — у README).
+- Опитування за групами (`DATAKOM_GROUPS`): `live` (генератор, двигун, включно з температурою
+  масла і зарядним входом) і `mains` — кожен скрейп, разом 7 запитів; `alarms` 60 с,
+  `counters` 300 с, `info` 3600 с; `extended` вимкнено.
+- Нова дешборда: `dashboards/generator.json` (rows: Genset status / mode, Mains info, Genset info,
+  Engine info, Run timeline), ще не імпортована і не перевірена в Grafana.
+- Адреса контролера не має значення за замовчуванням: `DATAKOM_HOST` обов'язковий.
+- `datakom-exporter probe` (замість `--probe`), `datakom-exporter dump` → фікстура для тестів,
+  `pytest -m live` з `DATAKOM_LIVE_HOST` — перевірка нового контролера (див. README).
+- Фікстура `tests/fixtures/d300mk3_cooldown_grafana_2026-11-17.json` — реальні значення D-300
+  під час запуску 2026-11-17 12:45 UTC з історії Prometheus (AUTO, статус 22 cooling,
+  53.36 Гц, 1600 rpm, 231–232 В, батарея 14.42 В).
+
 ## Наступні кроки
 1. Встановити плату, перенести TCP/IP-параметри, Gateway to RS-485 = 0.
-2. `pip install pymodbus` на <exporter-host>; `./datakom_d509_exporter.py --probe` (бажано при
-   працюючому двигуні або з напругою мережі) → виставити `WORD_ORDER`, записати ID з 10609 у цей файл.
-3. `--stdout`, звірити з дисплеєм: напруги, L-L адреси, помфазну потужність, PF, kWh мережі.
-4. Підключити в cron/systemd timer, прибрати старий скрипт і `gen.prom` (інакше дублікати/застарілі значення).
-5. Перевести дашборд на `genset_*` (без ручних множників), додати мережу, аварії, `genset_modbus_up`;
-   оновити value mappings для статусу (0 = at rest, 5 = cranking, 6 = idle, 25 = stopping, ...) і режиму.
-6. Алерти: `genset_modbus_up == 0`, `genset_alarms_count{class="shutdown"} > 0`, низька батарея, рівень палива.
-7. Після міграції дашборду: `EMIT_LEGACY=False`.
+2. На Raspberry Pi: `sudo ./deploy/install.sh`, `datakom-exporter probe --host <ip>` (бажано при
+   працюючому двигуні або з напругою мережі) → виставити `DATAKOM_WORD_ORDER`, записати ID з 10609
+   сюди і в `registers.KNOWN_MODELS`.
+3. `DATAKOM_LIVE_HOST=<ip> pytest -m live -v -s`; `datakom-exporter dump` у
+   `tests/fixtures/recorded/` + заповнити `expected` значеннями з дисплея.
+4. Додати target у Prometheus, прибрати старий скрипт і `gen.prom` з <exporter-host>.
+5. Імпортувати `dashboards/generator.json` у Grafana (замінить "Generator") і перевірити.
+6. Алерти: `genset_modbus_up == 0`, `genset_alarms{class="shutdown"} > 0`, низька батарея, рівень палива.
 
 ## Джерела
 - D-300 MK3 manual: https://www.datakom.kiev.ua/upload/iblock/82b/ekw5lw16fd2umifynmty46v5c1az9lyq/DATAKOM-300_MK3-User-Manual-v90.pdf
