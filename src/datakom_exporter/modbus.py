@@ -82,8 +82,8 @@ class ControllerReader:
         A Modbus exception response (e.g. illegal address on a model without that block)
         only fails that block. A lost response (the D-509 MK3 drops ~1 of 25 requests now and
         then) is retried once after a reconnect, which also resynchronises transaction ids;
-        only when that retry fails too, or reconnecting fails, the poll is aborted, so a dead
-        controller costs at most two timeouts per scrape, not one per block.
+        only when that retry fails too, or reconnecting fails, the poll is aborted, so a silent
+        controller costs at most 2 x (retries + 1) timeouts per scrape, not that per block.
         """
         snap = Snapshot(timestamp=time.time())
         t0 = time.monotonic()

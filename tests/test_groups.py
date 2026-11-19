@@ -135,9 +135,9 @@ def test_schedule(make_controller, make_collector):
     got, read = poll_at(2)                       # within min_poll_interval: cached
     assert reqs == []
 
-    got, read = poll_at(30)                      # only the per-scrape groups
-    assert read == {"live", "mains", "flags"}
-    assert reqs == read_plan(["live", "mains", "flags"])
+    got, read = poll_at(30)                      # per-scrape groups + tables (alarm active)
+    assert read == {"live", "mains", "flags", "alarms"}
+    assert reqs == read_plan(["live", "mains", "flags"]) + read_plan(["alarms"])
     assert got["genset_engine_hours_total"] == 700.0  # slow values served from cache
     assert 'genset_alarms{class="warning"}' in got
 
@@ -246,17 +246,14 @@ def test_alarm_flag_triggers_immediate_table_read():
     assert got['genset_alarm_active{bit="17",class="warning",name="Extension input 10"}'] == 1
     assert got['genset_alarms{class="warning"}'] == 1
 
-    # same summary, interval not due: tables are not read again
-    clock.t += 30
+    # a second warning while the first is active: the summary flags do not change, but the
+    # tables are read on every poll while an alarm is active, so it shows up at once
+    reader.words[10537] = 0b110                           # + warning table bit 18
+    clock.t += 10
     reader.requests.clear()
-    scrape(col)
-    assert alarm_requests(reader.requests) == []
-
-    # interval due and the alarm still active: read again
-    clock.t += 31
-    reader.requests.clear()
-    scrape(col)
+    got = scrape(col)
     assert len(alarm_requests(reader.requests)) == 3
+    assert got['genset_alarms{class="warning"}'] == 2
 
     # alarm cleared: zero, without reading the tables
     for a in list(reader.words):
@@ -389,3 +386,63 @@ def test_dashboard_panel_ids_unique():
     d = _dashboard()
     ids = [p["id"] for p in d["panels"]] + [q["id"] for p in d["panels"] for q in p.get("panels", [])]
     assert len(ids) == len(set(ids))
+
+
+def test_min_poll_interval_counts_from_the_end_of_a_slow_poll():
+    from datakom_exporter.collector import DatakomCollector
+
+    clock = Clock()
+
+    class SlowReader(FakeReader):
+        def poll(self, plan):
+            clock.t += 8                                  # silent controller: timeouts
+            return super().poll(plan)
+
+    reader = SlowReader(rest_words())
+    col = DatakomCollector(reader, groups={"live": 0}, min_poll_interval=5, clock=clock)
+    scrape(col)
+    reader.requests.clear()
+    clock.t += 1                                          # queued scrape right after the poll
+    scrape(col)
+    assert reader.requests == []
+
+
+def test_unexpected_reader_error_does_not_fail_the_scrape():
+    from datakom_exporter.collector import DatakomCollector
+
+    class BrokenReader(FakeReader):
+        def poll(self, plan):
+            raise ValueError("garbled frame")
+
+    col = DatakomCollector(BrokenReader({}), groups={"live": 0}, min_poll_interval=0, clock=Clock())
+    got = scrape(col)
+    assert got["genset_modbus_up"] == 0
+    assert got["genset_modbus_failed_blocks"] == len(read_plan(["live"]))
+
+
+def test_poll_without_due_groups_keeps_the_last_state():
+    from datakom_exporter.collector import DatakomCollector
+
+    clock = Clock()
+    reader = FakeReader(rest_words())
+    col = DatakomCollector(reader, groups={"counters": 300}, min_poll_interval=0, clock=clock)
+    assert scrape(col)["genset_modbus_up"] == 1
+    col._snap.connected = False                           # last real poll failed
+    clock.t += 10                                         # nothing due: controller not contacted
+    reader.requests.clear()
+    scrape(col)
+    assert reader.requests == []
+    assert col._snap.connected is False
+
+
+@pytest.mark.parametrize("value", ["live=nan", "live=-1", "live=inf", "live=x"])
+def test_bad_group_interval_is_rejected(value):
+    with pytest.raises(argparse.ArgumentTypeError):
+        cli.parse_groups(value)
+
+
+def test_bad_env_value_is_an_argparse_error(monkeypatch):
+    monkeypatch.setenv("DATAKOM_PORT", "abc")
+    with pytest.raises(SystemExit) as e:
+        cli.build_parser().parse_args(["--host", "controller.example"])
+    assert e.value.code == 2

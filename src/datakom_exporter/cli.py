@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import signal
 import sys
@@ -39,6 +40,24 @@ def _env(name: str, default: str) -> str:
     return os.environ.get(name, default)
 
 
+def _non_negative(conv):
+    """argparse type: conv() of a finite value >= 0 (env defaults are validated the same way)."""
+    def parse(s: str):
+        try:
+            v = conv(s)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"not a number: {s!r}") from None
+        if not math.isfinite(v) or v < 0:
+            raise argparse.ArgumentTypeError(f"must be a finite number >= 0: {s!r}")
+        return v
+    parse.__name__ = conv.__name__
+    return parse
+
+
+_uint = _non_negative(int)
+_ufloat = _non_negative(float)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="datakom-exporter", description=__doc__,
                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -49,24 +68,24 @@ def build_parser() -> argparse.ArgumentParser:
     c = p.add_argument_group("controller")
     c.add_argument("--host", default=os.environ.get("DATAKOM_HOST"),
                    help="controller address, required ($DATAKOM_HOST)")
-    c.add_argument("--port", type=int, default=int(_env("DATAKOM_PORT", "502")), help="$DATAKOM_PORT")
-    c.add_argument("--unit-id", type=int, default=int(_env("DATAKOM_UNIT_ID", "1")),
+    c.add_argument("--port", type=_uint, default=_env("DATAKOM_PORT", "502"), help="$DATAKOM_PORT")
+    c.add_argument("--unit-id", type=_uint, default=_env("DATAKOM_UNIT_ID", "1"),
                    help="$DATAKOM_UNIT_ID")
     c.add_argument("--word-order", choices=WORD_ORDERS,
                    default=_env("DATAKOM_WORD_ORDER", "low_first"),
                    help="32-bit word order ($DATAKOM_WORD_ORDER); D-300 MK3 is low_first")
-    c.add_argument("--timeout", type=float, default=float(_env("DATAKOM_TIMEOUT", "2")),
+    c.add_argument("--timeout", type=_ufloat, default=_env("DATAKOM_TIMEOUT", "2"),
                    help="per-request timeout, s ($DATAKOM_TIMEOUT)")
-    c.add_argument("--retries", type=int, default=int(_env("DATAKOM_RETRIES", "1")),
+    c.add_argument("--retries", type=_uint, default=_env("DATAKOM_RETRIES", "1"),
                    help="pymodbus retries on the same connection ($DATAKOM_RETRIES); a lost "
                         "response is always retried once after a reconnect anyway")
-    c.add_argument("--request-delay", type=float, default=float(_env("DATAKOM_REQUEST_DELAY", "0")),
+    c.add_argument("--request-delay", type=_ufloat, default=_env("DATAKOM_REQUEST_DELAY", "0"),
                    help="pause between block requests, s ($DATAKOM_REQUEST_DELAY)")
     s = p.add_argument_group("serve")
     s.add_argument("--listen", default=_env("DATAKOM_LISTEN", DEFAULT_LISTEN),
                    help="[addr]:port for /metrics ($DATAKOM_LISTEN)")
-    s.add_argument("--min-poll-interval", type=float,
-                   default=float(_env("DATAKOM_MIN_POLL_INTERVAL", "5")),
+    s.add_argument("--min-poll-interval", type=_ufloat,
+                   default=_env("DATAKOM_MIN_POLL_INTERVAL", "5"),
                    help="reuse the last poll for scrapes within this many seconds "
                         "($DATAKOM_MIN_POLL_INTERVAL)")
     s.add_argument("--groups", type=parse_groups,
@@ -98,8 +117,8 @@ def parse_groups(s: str) -> dict:
         if val.lower() == "off":
             continue
         try:
-            out[name] = float(val)
-        except ValueError:
+            out[name] = _ufloat(val)
+        except argparse.ArgumentTypeError:
             raise argparse.ArgumentTypeError(f"bad interval for {name}: {val!r}") from None
     if not out:
         raise argparse.ArgumentTypeError("no polling group enabled")

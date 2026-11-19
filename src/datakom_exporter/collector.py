@@ -16,6 +16,7 @@ import logging
 import threading
 import time
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily, InfoMetricFamily
 from prometheus_client.registry import Collector
@@ -45,6 +46,16 @@ from .registers import (
 log = logging.getLogger(__name__)
 
 Key = tuple[str, tuple[tuple[str, str], ...]]
+
+
+@dataclass(frozen=True)
+class _View:
+    """Consistent copy of the collector state, taken under the lock for one scrape."""
+
+    snap: Snapshot
+    words: dict[int, int]
+    group_ok_ts: dict[str, float]
+    up: bool
 
 
 def decode_snapshot(words: dict[int, int], word_order: str) -> dict[Key, int]:
@@ -90,14 +101,20 @@ class DatakomCollector(Collector):
 
         Several Prometheus servers (HA pair) scraping at once hit the controller only once.
         """
+        return self._view().snap
+
+    def _view(self) -> _View:
+        # The copy is taken under the lock: another scrape thread may poll (and change the
+        # cache) while this one is still building its exposition.
         with self._lock:
             now = self.clock()
             if self._polled_at is None or now - self._polled_at >= self.min_poll_interval:
                 self._poll(now)
-            return self._snap
+            return _View(self._snap, dict(self._words), dict(self._group_ok_ts), self.up)
 
-    def _flag_bits(self) -> set[int] | None:
-        regs = [self._words.get(FLAGS_ADDR + i) for i in range(FLAGS_WORDS)]
+    def _flag_bits(self, words: dict[int, int] | None = None) -> set[int] | None:
+        words = self._words if words is None else words
+        regs = [words.get(FLAGS_ADDR + i) for i in range(FLAGS_WORDS)]
         if any(v is None for v in regs):
             return None
         return set(alarm_bits(regs))  # type: ignore[arg-type]
@@ -116,7 +133,10 @@ class DatakomCollector(Collector):
         if gate_alarms and snap.connected:
             summary = self._alarm_summary()
             changed = summary != self._alarm_summary_at_read
-            if "alarms" in due or changed:
+            # While an alarm is active the tables are read on every poll: a second alarm of
+            # an already active class does not change the summary flags.
+            active = summary is not None and FLAG_ANY_ALARM in summary
+            if "alarms" in due or changed or active:
                 if summary is not None and FLAG_ANY_ALARM not in summary:
                     # no active alarm: the tables are all zero, no need to read them
                     for a in self._group_addrs["alarms"]:
@@ -128,15 +148,23 @@ class DatakomCollector(Collector):
                     self._apply(snap, ["alarms"], now)
                 self._alarm_summary_at_read = summary
 
-        self._polled_at = now
+        # End of the poll, not its start: a slow poll (silent controller, timeouts) must not
+        # make every queued scrape poll again.
+        self._polled_at = self.clock()
         self._snap = snap
         self.polls_total += 1
         self._log_transition(snap)
 
     def _read(self, groups: list[str]) -> Snapshot:
         if not groups:
-            return Snapshot(connected=True, timestamp=time.time())
-        snap = self.reader.poll(read_plan(groups))
+            # nothing due: the controller was not contacted, keep the last known state
+            return Snapshot(connected=bool(self._snap and self._snap.connected), timestamp=time.time())
+        try:
+            snap = self.reader.poll(read_plan(groups))
+        except Exception as e:  # never fail the scrape (reader.poll handles the expected errors)
+            log.exception("poll failed")
+            return Snapshot(timestamp=time.time(),
+                            failed_blocks=[(s, c, f"internal error: {e}") for s, c in read_plan(groups)])
         self.requests_total += snap.requests
         self.request_retries_total += snap.retried
         self.request_errors_total += sum(
@@ -194,11 +222,10 @@ class DatakomCollector(Collector):
         return iter(())
 
     def collect(self) -> Iterator:
-        snap = self.snapshot()
-        yield from self.families(snap)
+        yield from self.families(self._view())
 
-    def families(self, snap: Snapshot) -> Iterator:
-        words = self._words
+    def families(self, view: _View) -> Iterator:
+        snap, words = view.snap, view.words
         values = decode_snapshot(words, self.word_order)
 
         fams: dict[str, object] = {}
@@ -244,7 +271,7 @@ class DatakomCollector(Collector):
             yield count
             yield active
 
-        bits = self._flag_bits() if "flags" in self.groups else None
+        bits = self._flag_bits(words) if "flags" in self.groups else None
         if bits is not None:
             flag = GaugeMetricFamily("genset_flag", "Controller function flag (500-MODBUS 11555)",
                                      labels=["flag"])
@@ -255,12 +282,12 @@ class DatakomCollector(Collector):
         last = GaugeMetricFamily("genset_modbus_group_last_read_timestamp_seconds",
                                  "Unix time of the last successful read of a polling group",
                                  labels=["group"])
-        for g, ts in sorted(self._group_ok_ts.items()):
+        for g, ts in sorted(view.group_ok_ts.items()):
             last.add_metric([g], ts)
         yield last
 
         yield GaugeMetricFamily("genset_modbus_up", "1 if the last poll read data from the controller",
-                                value=1 if self.up else 0)
+                                value=1 if view.up else 0)
         yield GaugeMetricFamily("genset_modbus_poll_duration_seconds", "Duration of the last poll",
                                 value=snap.duration)
         yield GaugeMetricFamily("genset_modbus_poll_timestamp_seconds",

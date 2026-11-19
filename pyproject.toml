@@ -9,7 +9,7 @@ description = "Prometheus exporter for Datakom D-300/D-500/D-700 MK3 genset cont
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "pymodbus>=3.0",
+    "pymodbus>=3.0,<4",
     "prometheus_client>=0.12",
 ]
 
