@@ -46,59 +46,139 @@
           },
           "mappings": [
             {
+              "type": "value",
               "options": {
                 "0": {
+                  "text": "Genset at rest",
                   "color": "blue",
-                  "index": 0,
-                  "text": "Resting"
+                  "index": 0
                 },
                 "1": {
-                  "color": "red",
-                  "index": 1,
-                  "text": "Waiting"
+                  "text": "Wait before fuel",
+                  "color": "yellow",
+                  "index": 1
+                },
+                "2": {
+                  "text": "Engine preheat",
+                  "color": "yellow",
+                  "index": 2
+                },
+                "3": {
+                  "text": "Wait oil flash off",
+                  "color": "yellow",
+                  "index": 3
+                },
+                "4": {
+                  "text": "Crank rest",
+                  "color": "yellow",
+                  "index": 4
                 },
                 "5": {
+                  "text": "Cranking",
                   "color": "yellow",
-                  "index": 2,
-                  "text": "Cranking"
+                  "index": 5
                 },
                 "6": {
-                  "color": "text",
-                  "index": 3,
-                  "text": "Idle"
+                  "text": "Engine run idle speed",
+                  "color": "yellow",
+                  "index": 6
                 },
                 "7": {
-                  "color": "orange",
-                  "index": 4,
-                  "text": "Heating"
+                  "text": "Engine heating",
+                  "color": "yellow",
+                  "index": 7
                 },
                 "8": {
+                  "text": "Running off load",
                   "color": "green",
-                  "index": 5,
-                  "text": "Off load"
+                  "index": 8
+                },
+                "9": {
+                  "text": "Synchronizing to mains",
+                  "color": "purple",
+                  "index": 9
+                },
+                "10": {
+                  "text": "Load transfer to genset",
+                  "color": "purple",
+                  "index": 10
+                },
+                "11": {
+                  "text": "Gen cb activation",
+                  "color": "purple",
+                  "index": 11
+                },
+                "12": {
+                  "text": "Genset cb timer",
+                  "color": "purple",
+                  "index": 12
                 },
                 "13": {
+                  "text": "Master genset on load",
                   "color": "green",
-                  "index": 6,
-                  "text": "On load"
+                  "index": 13
+                },
+                "14": {
+                  "text": "Peak lopping",
+                  "color": "green",
+                  "index": 14
+                },
+                "15": {
+                  "text": "Power exporting",
+                  "color": "green",
+                  "index": 15
+                },
+                "16": {
+                  "text": "Slave genset on load",
+                  "color": "green",
+                  "index": 16
+                },
+                "17": {
+                  "text": "Synchronizing back to mains",
+                  "color": "purple",
+                  "index": 17
+                },
+                "18": {
+                  "text": "Load transfer to mains",
+                  "color": "purple",
+                  "index": 18
+                },
+                "19": {
+                  "text": "Mains cb activation",
+                  "color": "purple",
+                  "index": 19
                 },
                 "20": {
+                  "text": "Mains cb timer",
                   "color": "purple",
-                  "index": 7,
-                  "text": "Delay"
+                  "index": 20
+                },
+                "21": {
+                  "text": "Stop with cooldown",
+                  "color": "blue",
+                  "index": 21
                 },
                 "22": {
+                  "text": "Cooling down",
                   "color": "blue",
-                  "index": 8,
-                  "text": "Cooling"
+                  "index": 22
+                },
+                "23": {
+                  "text": "Engine stop idle speed",
+                  "color": "red",
+                  "index": 23
+                },
+                "24": {
+                  "text": "Immediate stop",
+                  "color": "red",
+                  "index": 24
                 },
                 "25": {
+                  "text": "Engine stopping",
                   "color": "red",
-                  "index": 9,
-                  "text": "Stopping"
+                  "index": 25
                 }
-              },
-              "type": "value"
+              }
             }
           ],
           "thresholds": {
@@ -873,194 +953,13 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS_ID}"
       },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "continuous-GrYlRd"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 50
-              }
-            ]
-          },
-          "unit": "amp"
-        },
-        "overrides": []
-      },
+      "type": "gauge",
+      "title": "Mains frequency",
+      "id": 12,
       "gridPos": {
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 8
-      },
-      "id": 12,
-      "options": {
-        "displayMode": "gradient",
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "maxVizHeight": 300,
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
-      },
-      "pluginVersion": "11.6.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_current_amperes{instance=\"$instance\",source=\"mains\",phase=\"L1\"}",
-          "legendFormat": "Phase 1",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_current_amperes{instance=\"$instance\",source=\"mains\",phase=\"L2\"}",
-          "legendFormat": "Phase 2",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_current_amperes{instance=\"$instance\",source=\"mains\",phase=\"L3\"}",
-          "legendFormat": "Phase 3",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Mains current",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS_ID}"
-      },
-      "type": "gauge",
-      "title": "Mains power",
-      "id": 13,
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 12,
-        "y": 8
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "kwatt"
-        },
-        "overrides": []
-      },
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_active_power_kilowatts{instance=\"$instance\",source=\"mains\",phase=\"L1\"}",
-          "legendFormat": "Phase 1",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_active_power_kilowatts{instance=\"$instance\",source=\"mains\",phase=\"L2\"}",
-          "legendFormat": "Phase 2",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_active_power_kilowatts{instance=\"$instance\",source=\"mains\",phase=\"L3\"}",
-          "legendFormat": "Phase 3",
-          "range": true,
-          "refId": "C"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS_ID}"
-      },
-      "type": "gauge",
-      "title": "Mains frequency",
-      "id": 14,
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
         "y": 8
       },
       "fieldConfig": {
@@ -1122,9 +1021,473 @@
       ]
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS_ID}"
+      },
+      "type": "stat",
+      "title": "Mains",
+      "id": 13,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "FAIL",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_flag{instance=\"$instance\",flag=\"mains_fail\"}",
+          "legendFormat": "Mains",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS_ID}"
+      },
+      "type": "stat",
+      "title": "Mains contactor",
+      "id": 14,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Open",
+                  "color": "text",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Closed",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_flag{instance=\"$instance\",flag=\"mains_contactor\"}",
+          "legendFormat": "Mains contactor",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS_ID}"
+      },
+      "type": "stat",
+      "title": "Genset contactor",
+      "id": 15,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Open",
+                  "color": "text",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Closed",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_flag{instance=\"$instance\",flag=\"genset_contactor\"}",
+          "legendFormat": "Genset contactor",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS_ID}"
+      },
+      "type": "stat",
+      "title": "Auto ready",
+      "id": 16,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Not ready",
+                  "color": "orange",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Ready",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_flag{instance=\"$instance\",flag=\"auto_ready\"}",
+          "legendFormat": "Auto ready",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS_ID}"
+      },
+      "type": "stat",
+      "title": "Engine state",
+      "id": 17,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Stopped",
+                  "color": "text",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Running",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_flag{instance=\"$instance\",flag=\"engine_running\"}",
+          "legendFormat": "Engine",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS_ID}"
+      },
+      "type": "stat",
+      "title": "State timer",
+      "id": 18,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_operation_timer_seconds{instance=\"$instance\"}",
+          "legendFormat": "Timer",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
       "type": "row",
       "title": "Genset info",
-      "id": 15,
+      "id": 19,
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -1162,7 +1525,7 @@
         "x": 0,
         "y": 17
       },
-      "id": 16,
+      "id": 20,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -1266,7 +1629,7 @@
         "x": 6,
         "y": 17
       },
-      "id": 17,
+      "id": 21,
       "options": {
         "displayMode": "gradient",
         "legend": {
@@ -1373,7 +1736,7 @@
         "x": 12,
         "y": 17
       },
-      "id": 18,
+      "id": 22,
       "options": {
         "minVizHeight": 75,
         "minVizWidth": 75,
@@ -1467,7 +1830,7 @@
         "x": 18,
         "y": 17
       },
-      "id": 19,
+      "id": 23,
       "options": {
         "minVizHeight": 75,
         "minVizWidth": 75,
@@ -1572,7 +1935,7 @@
         "x": 0,
         "y": 25
       },
-      "id": 20,
+      "id": 24,
       "options": {
         "legend": {
           "calcs": [],
@@ -1607,7 +1970,7 @@
     {
       "type": "row",
       "title": "Engine info",
-      "id": 21,
+      "id": 25,
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -1646,7 +2009,7 @@
         "x": 0,
         "y": 34
       },
-      "id": 22,
+      "id": 26,
       "options": {
         "minVizHeight": 75,
         "minVizWidth": 75,
@@ -1716,7 +2079,7 @@
         "x": 5,
         "y": 34
       },
-      "id": 23,
+      "id": 27,
       "options": {
         "minVizHeight": 75,
         "minVizWidth": 75,
@@ -1792,7 +2155,7 @@
         "x": 10,
         "y": 34
       },
-      "id": 24,
+      "id": 28,
       "options": {
         "minVizHeight": 75,
         "minVizWidth": 75,
@@ -1838,7 +2201,7 @@
       },
       "type": "gauge",
       "title": "Oil temperature",
-      "id": 25,
+      "id": 29,
       "gridPos": {
         "h": 4,
         "w": 5,
@@ -1914,7 +2277,7 @@
       },
       "type": "gauge",
       "title": "Charge input",
-      "id": 26,
+      "id": 30,
       "gridPos": {
         "h": 4,
         "w": 4,
@@ -2186,7 +2549,7 @@
         "x": 0,
         "y": 38
       },
-      "id": 27,
+      "id": 31,
       "options": {
         "legend": {
           "calcs": [
@@ -2309,7 +2672,7 @@
         "x": 21,
         "y": 38
       },
-      "id": 28,
+      "id": 32,
       "options": {
         "displayMode": "lcd",
         "legend": {
@@ -2360,7 +2723,7 @@
     {
       "type": "row",
       "title": "Run timeline",
-      "id": 29,
+      "id": 33,
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -2394,59 +2757,139 @@
           },
           "mappings": [
             {
+              "type": "value",
               "options": {
                 "0": {
+                  "text": "Genset at rest",
                   "color": "transparent",
-                  "index": 0,
-                  "text": "Resting"
+                  "index": 0
                 },
                 "1": {
-                  "color": "red",
-                  "index": 1,
-                  "text": "Waiting"
+                  "text": "Wait before fuel",
+                  "color": "yellow",
+                  "index": 1
+                },
+                "2": {
+                  "text": "Engine preheat",
+                  "color": "yellow",
+                  "index": 2
+                },
+                "3": {
+                  "text": "Wait oil flash off",
+                  "color": "yellow",
+                  "index": 3
+                },
+                "4": {
+                  "text": "Crank rest",
+                  "color": "yellow",
+                  "index": 4
                 },
                 "5": {
+                  "text": "Cranking",
                   "color": "yellow",
-                  "index": 2,
-                  "text": "Cranking"
+                  "index": 5
                 },
                 "6": {
-                  "color": "purple",
-                  "index": 3,
-                  "text": "Idle"
+                  "text": "Engine run idle speed",
+                  "color": "yellow",
+                  "index": 6
                 },
                 "7": {
-                  "color": "orange",
-                  "index": 4,
-                  "text": "Heating"
+                  "text": "Engine heating",
+                  "color": "yellow",
+                  "index": 7
                 },
                 "8": {
+                  "text": "Running off load",
                   "color": "green",
-                  "index": 5,
-                  "text": "Off load"
+                  "index": 8
+                },
+                "9": {
+                  "text": "Synchronizing to mains",
+                  "color": "purple",
+                  "index": 9
+                },
+                "10": {
+                  "text": "Load transfer to genset",
+                  "color": "purple",
+                  "index": 10
+                },
+                "11": {
+                  "text": "Gen cb activation",
+                  "color": "purple",
+                  "index": 11
+                },
+                "12": {
+                  "text": "Genset cb timer",
+                  "color": "purple",
+                  "index": 12
                 },
                 "13": {
+                  "text": "Master genset on load",
                   "color": "green",
-                  "index": 6,
-                  "text": "On load"
+                  "index": 13
+                },
+                "14": {
+                  "text": "Peak lopping",
+                  "color": "green",
+                  "index": 14
+                },
+                "15": {
+                  "text": "Power exporting",
+                  "color": "green",
+                  "index": 15
+                },
+                "16": {
+                  "text": "Slave genset on load",
+                  "color": "green",
+                  "index": 16
+                },
+                "17": {
+                  "text": "Synchronizing back to mains",
+                  "color": "purple",
+                  "index": 17
+                },
+                "18": {
+                  "text": "Load transfer to mains",
+                  "color": "purple",
+                  "index": 18
+                },
+                "19": {
+                  "text": "Mains cb activation",
+                  "color": "purple",
+                  "index": 19
                 },
                 "20": {
+                  "text": "Mains cb timer",
                   "color": "purple",
-                  "index": 7,
-                  "text": "Delay"
+                  "index": 20
+                },
+                "21": {
+                  "text": "Stop with cooldown",
+                  "color": "blue",
+                  "index": 21
                 },
                 "22": {
+                  "text": "Cooling down",
                   "color": "blue",
-                  "index": 8,
-                  "text": "Cooling"
+                  "index": 22
+                },
+                "23": {
+                  "text": "Engine stop idle speed",
+                  "color": "red",
+                  "index": 23
+                },
+                "24": {
+                  "text": "Immediate stop",
+                  "color": "red",
+                  "index": 24
                 },
                 "25": {
+                  "text": "Engine stopping",
                   "color": "red",
-                  "index": 9,
-                  "text": "Stopping"
+                  "index": 25
                 }
-              },
-              "type": "value"
+              }
             }
           ],
           "thresholds": {
@@ -2466,7 +2909,7 @@
         "x": 0,
         "y": 49
       },
-      "id": 30,
+      "id": 34,
       "options": {
         "alignValue": "left",
         "legend": {
@@ -2570,7 +3013,7 @@
         "x": 0,
         "y": 53
       },
-      "id": 31,
+      "id": 35,
       "options": {
         "alignValue": "left",
         "legend": {
@@ -2603,6 +3046,159 @@
         }
       ],
       "title": "Mode",
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS_ID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "fillOpacity": 70,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "off",
+                  "color": "transparent",
+                  "index": 0
+                },
+                "1": {
+                  "text": "on",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "OK",
+                        "color": "transparent",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "FAIL",
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "id": 36,
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": false,
+        "rowHeight": 0.9,
+        "showValue": "auto",
+        "tooltip": {
+          "hideZeros": false,
+          "maxHeight": 600,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_flag{instance=\"$instance\",flag=\"mains_fail\"}",
+          "legendFormat": "Mains fail",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_flag{instance=\"$instance\",flag=\"mains_contactor\"}",
+          "legendFormat": "Mains contactor",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_flag{instance=\"$instance\",flag=\"genset_contactor\"}",
+          "legendFormat": "Genset contactor",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS_ID}"
+          },
+          "editorMode": "code",
+          "expr": "genset_flag{instance=\"$instance\",flag=\"engine_running\"}",
+          "legendFormat": "Engine running",
+          "range": true,
+          "refId": "D"
+        }
+      ],
+      "title": "AMF",
       "type": "state-timeline"
     }
   ],
@@ -2655,6 +3251,6 @@
   "timezone": "",
   "title": "Generator (datakom-exporter)",
   "uid": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
-  "version": 8,
+  "version": 9,
   "description": "Datakom genset controller via datakom-exporter (genset_* metrics)"
 }

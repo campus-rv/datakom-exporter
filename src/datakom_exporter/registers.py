@@ -4,6 +4,12 @@ Source: Datakom "500-MODBUS" application manual, which is common for the D-300,
 D-500 and D-700 families. Addresses are decimal holding-register addresses as
 sent on the wire (FC03, zero-based PDU addresses).
 
+Installation: AMF (automatic mains failure) with the current transformers on the alternator
+output. The controller therefore measures current, power, PF and energy only for the genset;
+for the mains it measures voltage and frequency, and reports mains failure and contactor
+positions through the function flags (11555). Mains current/power registers stay in the
+"extended" group (they read zero with CTs on the alternator side).
+
 Facts established on the real D-300 MK3 (see docs/GENERATOR_MODBUS_CONTEXT.md):
 - 32-bit values are stored LOW word first at the listed address, although the
   manual says "high word first". The order is configurable (``--word-order``).
@@ -21,23 +27,26 @@ WORD_ORDERS = ("low_first", "high_first")
 
 # Polling groups. Each group has its own poll interval (see DEFAULT_GROUP_INTERVALS);
 # a group that is switched off is never read from the controller and never exported.
-GROUPS = ("live", "alarms", "counters", "info", "mains", "extended")
+GROUPS = ("live", "mains", "flags", "alarms", "counters", "info", "extended")
 GROUP_HELP = {
-    "live": "genset voltage/current/per-phase and total power/PF/frequency, battery, charge input, oil pressure, "
-            "oil and coolant temperature, fuel, rpm, status, mode",
-    "alarms": "shutdown / loaddump / warning alarm tables (3 requests)",
+    "live": "genset voltage/current/per-phase and total power/PF/frequency, battery, charge input, "
+            "oil pressure, oil and coolant temperature, fuel, rpm, status, mode, state timer",
+    "mains": "mains voltage and frequency (no extra requests: same blocks as live)",
+    "flags": "function flags: mains fail, mains/genset contactor, auto ready, engine running, "
+             "alarm summary, service requests, ... (1 request)",
+    "alarms": "shutdown / loaddump / warning alarm tables (3 requests); with the flags group "
+              "enabled they are read only while an alarm flag is set",
     "counters": "engine hours, runs, cranks, on-load events, genset kWh, hours to service "
                 "(2 requests)",
     "info": "device identity, hardware and software version (1 request)",
-    "mains": "mains voltage, current, per-phase and total power, PF, frequency",
-    "extended": "line-to-line voltages, reactive power, kVArh, hours/days since service, "
-                "days to service",
+    "extended": "line-to-line voltages, reactive power, kVArh, hours/days since service, days to "
+                "service, mains current/power/PF/kVA/energy (zero with CTs on the alternator)",
 }
 # seconds between reads; 0 = on every poll (i.e. every scrape, limited by --min-poll-interval).
-# Chosen from the 'Generator' dashboard (dashboards/generator.json): live genset and mains
-# values every scrape, slow-changing counters and identity rarely.
+# Chosen from the 'Generator' dashboard (dashboards/generator.json): live genset values, mains
+# voltage and the AMF state flags every scrape, slow-changing counters and identity rarely.
 DEFAULT_GROUP_INTERVALS: dict[str, float] = {
-    "live": 0, "mains": 0, "alarms": 60, "counters": 300, "info": 3600,
+    "live": 0, "mains": 0, "flags": 0, "alarms": 60, "counters": 300, "info": 3600,
 }
 
 
@@ -76,34 +85,41 @@ def _reg(group: str, name: str, address: int, words: int = 1, signed: bool = Fal
 
 
 # --- electrical measurements --------------------------------------------------------------------
+# Voltage and frequency are measured on both sides. Current, power and PF come from the CTs:
+# on the alternator output in this AMF installation, so mains current/power/PF go to
+# "extended" (with CTs on the load side the controller reports them per contactor position).
+def _meas(src: str) -> str:
+    return "live" if src == "genset" else "extended"
+
+
 for _src, _v, _ll, _i in (("mains", 10240, 10252, 10264), ("genset", 10246, 10258, 10270)):
-    _g = "live" if _src == "genset" else "mains"
+    _vg = "live" if _src == "genset" else "mains"
     for _n, _ph in enumerate(("L1", "L2", "L3")):
-        _reg(_g, "genset_voltage_ln_volts", _v + 2 * _n, 2, False, 10,
+        _reg(_vg, "genset_voltage_ln_volts", _v + 2 * _n, 2, False, 10,
              "Phase-to-neutral voltage", source=_src, phase=_ph)
         _reg("extended", "genset_voltage_ll_volts", _ll + 2 * _n, 2, False, 10,
              "Line-to-line voltage", source=_src, phase=("L1-L2", "L2-L3", "L3-L1")[_n])
-        _reg(_g, "genset_current_amperes", _i + 2 * _n, 2, False, 10,
+        _reg(_meas(_src), "genset_current_amperes", _i + 2 * _n, 2, False, 10,
              "Phase current", source=_src, phase=_ph)
 
 for _src, _p in (("mains", 10280), ("genset", 10286)):
-    _g = "live" if _src == "genset" else "mains"
     for _n, _ph in enumerate(("L1", "L2", "L3")):
-        _reg(_g, "genset_active_power_kilowatts", _p + 2 * _n, 2, True, 10,
+        _reg(_meas(_src), "genset_active_power_kilowatts", _p + 2 * _n, 2, True, 10,
              "Active power", source=_src, phase=_ph)
 
 for _src, _p, _q, _s, _pf, _f in (("mains", 10292, 10308, 10324, 10334, 10338),
                                   ("genset", 10294, 10310, 10326, 10335, 10339)):
-    _g = "live" if _src == "genset" else "mains"
-    _reg(_g, "genset_active_power_kilowatts", _p, 2, True, 10, "Active power",
+    _reg(_meas(_src), "genset_active_power_kilowatts", _p, 2, True, 10, "Active power",
          source=_src, phase="total")
     _reg("extended", "genset_reactive_power_kilovars", _q, 2, True, 10, "Reactive power",
          source=_src, phase="total")
-    _reg(_g, "genset_apparent_power_kilovoltamperes", _s, 2, False, 10, "Apparent power",
-         source=_src, phase="total")
+    _reg(_meas(_src), "genset_apparent_power_kilovoltamperes", _s, 2, False, 10,
+         "Apparent power", source=_src, phase="total")
     # D-300 MK3 reports 1000 for PF 1.000 at rest; sign on capacitive load still to verify.
-    _reg(_g, "genset_power_factor", _pf, 1, True, 1000, "Total power factor", source=_src)
-    _reg(_g, "genset_frequency_hertz", _f, 1, False, 100, "Frequency", source=_src)
+    _reg(_meas(_src), "genset_power_factor", _pf, 1, True, 1000, "Total power factor",
+         source=_src)
+    _reg("live" if _src == "genset" else "mains", "genset_frequency_hertz", _f, 1, False, 100,
+         "Frequency", source=_src)
 
 # --- engine -------------------------------------------------------------------------------------
 _reg("live", "genset_charge_input_volts", 10340, 1, False, 100, "Charge alternator input voltage")
@@ -115,11 +131,22 @@ _reg("live", "genset_oil_temperature_celsius", 10364, 1, True, 10, "Oil temperat
 _reg("live", "genset_engine_rpm", 10376, 1, False, 1, "Engine speed, rpm")
 
 # --- state --------------------------------------------------------------------------------------
+OPERATION_STATUS: dict[int, str] = {
+    0: "genset at rest", 1: "wait before fuel", 2: "engine preheat", 3: "wait oil flash off",
+    4: "crank rest", 5: "cranking", 6: "engine run idle speed", 7: "engine heating",
+    8: "running off load", 9: "synchronizing to mains", 10: "load transfer to genset",
+    11: "gen cb activation", 12: "genset cb timer", 13: "master genset on load",
+    14: "peak lopping", 15: "power exporting", 16: "slave genset on load",
+    17: "synchronizing back to mains", 18: "load transfer to mains", 19: "mains cb activation",
+    20: "mains cb timer", 21: "stop with cooldown", 22: "cooling down",
+    23: "engine stop idle speed", 24: "immediate stop", 25: "engine stopping",
+}
 _reg("live", "genset_operation_status", 10604, 1, False, 1,
-     "Unit operation status code (0=resting 1=waiting 5=cranking 6=idle 7=heating "
-     "8=off load 13=on load 20=delay 22=cooling 25=stopping)")
+     "Unit operation status code: " + ", ".join(f"{k}={v}" for k, v in OPERATION_STATUS.items()))
 _reg("live", "genset_mode", 10605, 1, False, 1,
-     "Unit mode bitmap (1=STOP 2=RUN/MANUAL 4=AUTO 8=TEST)")
+     "Unit mode (1=STOP 2=RUN/MANUAL 4=AUTO 8=TEST)")
+_reg("live", "genset_operation_timer_seconds", 10606, 1, False, 1,
+     "Remaining time of the current wait state (e.g. mains fail delay, cooling)")
 
 # --- counters -----------------------------------------------------------------------------------
 _reg("counters", "genset_runs_total", 10616, 2, False, 1, "Number of genset runs")
@@ -132,6 +159,9 @@ _reg("extended", "genset_reactive_energy_kilovarhours_total", 10630, 2, False, 1
      "Genset reactive energy", source="genset", kind="inductive")
 _reg("extended", "genset_reactive_energy_kilovarhours_total", 10632, 2, False, 10,
      "Genset reactive energy", source="genset", kind="capacitive")
+# Mains energy needs CTs on the load side: zero in this installation.
+_reg("extended", "genset_active_energy_kilowatthours_total", 11569, 2, False, 10,
+     "Mains total active energy", source="mains")
 
 # --- service ------------------------------------------------------------------------------------
 _reg("extended", "genset_service_hours_since", 10624, 2, False, 100, "Engine hours since last service")
@@ -154,6 +184,40 @@ KNOWN_MODELS: dict[int, str] = {0xD300: "D-300", 0xD500: "D-500", 0xD700: "D-700
 ALARM_BLOCKS: dict[str, int] = {"shutdown": 10504, "loaddump": 10520, "warning": 10536}
 ALARM_WORDS = 16
 
+# --- function flags: 224-bit array, bit 0 = LSB of the first register ----------------------------
+FLAGS_ADDR = 11555
+FLAGS_WORDS = 14
+def _names(text: str) -> list[str]:
+    return text.split()
+
+
+# names in 500-MODBUS order, bit 0 first
+_FLAG_NAMES = _names("""
+fuel horn crank stop_solenoid genset_contactor mains_contactor idle_speed preheat alternate_crank
+fuel_main_winding genset_close_pulse genset_open_pulse genset_uv_coil mains_close_pulse
+mains_open_pulse mains_uv_coil flashing_relay gas_solenoid fuel_pump_control choke block_heater
+coolant_cooler coolant_heater fan_control air_flap_control canopy_fan_control ambient_fan_control
+remote_start_output genset_ready bus_bar_contactor bus_bar_close_pulse bus_bar_open_pulse
+bus_bar_uv_coil load_shedding load_add load_substract service_1_request service_2_request
+service_3_request mains_phase_order_fail genset_phase_order_fail auto_ready weekly_schedule_on
+exerciser_on mains_fail pgm_mode_active engine_running genset_voltage_ok alarm_check_enable
+oil_pressure_ok shutdown_alarm loaddump_alarm warning_alarm shutdown_or_loaddump any_alarm
+test_mode auto_mode manual_mode off_mode not_in_auto genset_at_rest waiting_before_fuel
+preheating waiting_oil_flash_off engine_heating synchronizing cooling_down stopping
+protections_disabled remote_start_input disable_auto_start force_to_start auto_restore_inhibited
+gen_loading_inhibited inp_expansion1_mounted inp_expansion2_mounted out_expansion1_mounted
+out_expansion2_mounted master_unit multi_gen_remote_start
+""") + [f"remote_control_out_{n}" for n in range(1, 17)] + [
+    f"multi_load_{op}_out_{n}" for n in range(1, 6) for op in ("add", "subst")] + _names("""
+heavy_duty_active ecu_power_on battery_charge_run fire_circuit_ps_active pre_transfer_delay
+secondary_volt_freq
+""")
+FUNCTION_FLAGS: dict[int, str] = dict(enumerate(_FLAG_NAMES))
+assert len(FUNCTION_FLAGS) == 112 and FUNCTION_FLAGS[44] == "mains_fail"
+assert FUNCTION_FLAGS[54] == "any_alarm" and FUNCTION_FLAGS[111] == "secondary_volt_freq"
+FLAG_ANY_ALARM = 54
+FLAG_ALARM_SUMMARY = (50, 51, 52, 54)  # shutdown, loaddump, warning, any
+
 REGISTER_BY_KEY: dict[tuple[str, tuple[tuple[str, str], ...]], Register] = {
     r.key: r for r in REGISTERS
 }
@@ -165,6 +229,8 @@ def group_addresses(group: str) -> list[int]:
         return [a for start in ALARM_BLOCKS.values() for a in range(start, start + ALARM_WORDS)]
     if group == "info":
         return list(IDENTITY_ADDRESSES)
+    if group == "flags":
+        return list(range(FLAGS_ADDR, FLAGS_ADDR + FLAGS_WORDS))
     return [a for r in REGISTERS if r.group == group for a in r.addresses]
 
 

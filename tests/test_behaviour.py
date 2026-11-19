@@ -7,10 +7,10 @@ import urllib.request
 
 import pytest
 from conftest import FIXTURES, fixture_words, load_fixture, scrape
-from modbus_sim import free_port
+from modbus_sim import flag_words, free_port
 
 from datakom_exporter import cli
-from datakom_exporter.registers import ALARM_BLOCKS, READ_PLAN
+from datakom_exporter.registers import ALARM_BLOCKS, GROUPS, READ_PLAN, read_plan
 
 REST = FIXTURES / "d300mk3_rest.json"
 
@@ -23,7 +23,8 @@ def test_controller_down_gives_up_0_quickly(make_collector):
     col = make_collector(free_port(), timeout=0.5)  # nothing listens there
     got = scrape(col)
     assert got["genset_modbus_up"] == 0
-    assert got["genset_modbus_failed_blocks"] == len(READ_PLAN)
+    # alarm tables are gated by the flags, so a dead controller costs the rest of the plan
+    assert got["genset_modbus_failed_blocks"] == len(read_plan([g for g in GROUPS if g != "alarms"]))
     assert got["genset_modbus_poll_duration_seconds"] < 3
     assert not any(k.startswith("genset_voltage") for k in got)
 
@@ -37,6 +38,7 @@ def test_wrong_unit_id_gives_up_0(make_controller, make_collector):
 def test_missing_block_fails_only_that_block(make_controller, make_collector):
     """A model without some registers answers 'illegal address' for that block only."""
     words = rest_words()
+    words.update(flag_words(["warning_alarm", "any_alarm"], base=words))  # tables get read
     start = ALARM_BLOCKS["warning"]
     for a in range(start, start + 16):
         del words[a]
@@ -67,7 +69,8 @@ def test_min_poll_interval_shares_one_poll(make_controller, make_collector):
     col = make_collector(sim.port, min_poll_interval=60)
     a, b = scrape(col), scrape(col)
     assert a["genset_modbus_polls_total"] == b["genset_modbus_polls_total"] == 1
-    assert b["genset_modbus_requests_total"] == len(READ_PLAN)
+    # no alarm flag set in this fixture: the alarm tables are not read
+    assert b["genset_modbus_requests_total"] == len(read_plan([g for g in GROUPS if g != "alarms"]))
 
 
 def test_concurrent_scrapes_poll_once(make_controller, make_collector):

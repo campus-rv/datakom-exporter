@@ -90,6 +90,22 @@
   "genset_alarms{class=\"shutdown\"}": 0,
   "genset_alarm_active{bit=\"17\",class=\"warning\"}": 1,
   "genset_oil_temperature_celsius": 65.2,
-  "genset_service_hours_to{service=\"1\"}": 43.21
- }
+  "genset_service_hours_to{service=\"1\"}": 43.21,
+  "genset_flag{flag=\"mains_contactor\"}": 1,
+  "genset_flag{flag=\"genset_contactor\"}": 0,
+  "genset_flag{flag=\"mains_fail\"}": 0,
+  "genset_flag{flag=\"engine_running\"}": 1,
+  "genset_flag{flag=\"warning_alarm\"}": 1,
+  "genset_flag{flag=\"not_in_auto\"}": 1
+ },
+ "flags": [
+  "mains_contactor",
+  "engine_running",
+  "genset_voltage_ok",
+  "oil_pressure_ok",
+  "test_mode",
+  "not_in_auto",
+  "warning_alarm",
+  "any_alarm"
+ ]
 }

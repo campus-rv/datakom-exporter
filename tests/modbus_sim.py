@@ -6,6 +6,7 @@ A fixture JSON describes the controller's holding registers:
 - ``registers``: sparse {"<address>": value} overlay. 32-bit values may be given as
   ``{"u32": n}`` / ``{"s32": n}`` and are split using the fixture's ``word_order``;
   16-bit signed values as ``{"s16": n}``;
+- ``flags``: ["mains_fail", "genset_contactor", ...] function flags (11555) to set;
 - ``zero_fill``: if true, every block of the exporter's read plan exists and defaults to 0;
 - ``missing_blocks``: [start, ...] blocks to remove (simulate a model without them:
   the server answers "illegal data address" like a real controller).
@@ -24,7 +25,7 @@ from pathlib import Path
 from pymodbus.server import ModbusTcpServer
 from pymodbus.simulator import DataType, SimData, SimDevice
 
-from datakom_exporter.registers import READ_PLAN
+from datakom_exporter.registers import FLAGS_ADDR, FUNCTION_FLAGS, READ_PLAN
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -54,12 +55,24 @@ def fixture_words(fx: dict) -> dict[int, int]:
             n = (v.get("u32", v.get("s32"))) & 0xFFFFFFFF
             hi, lo = n >> 16, n & 0xFFFF
             words[a], words[a + 1] = (lo, hi) if order == "low_first" else (hi, lo)
+    words.update(flag_words(fx.get("flags", []), base=words))
     for start in fx.get("missing_blocks", []):
         for s, c in READ_PLAN:
             if s == start:
                 for a in range(s, s + c):
                     words.pop(a, None)
     return words
+
+
+def flag_words(names, base=None) -> dict[int, int]:
+    """Registers 11555.. with the given function flags set (others kept from ``base`` or 0)."""
+    bit_of = {v: k for k, v in FUNCTION_FLAGS.items()}
+    out = {}
+    for name in names:
+        b = bit_of[name]
+        a = FLAGS_ADDR + b // 16
+        out[a] = out.get(a, (base or {}).get(a, 0)) | (1 << (b % 16))
+    return out
 
 
 def _runs(words: dict[int, int]) -> list[tuple[int, list[int]]]:

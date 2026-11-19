@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 Prometheus-експортер для контролерів генераторів Datakom D-300/500/700 MK3 (Modbus TCP),
-працює як systemd-сервіс на Raspberry Pi. Вимоги — [SPEC.md](SPEC.md), експлуатація —
+працює як systemd-сервіс на Raspberry Pi. Установка — AMF з трансформаторами струму на виході
+генератора: струм/потужність/енергія лише генератора; мережа — напруга, частота, прапорці стану. Вимоги — [SPEC.md](SPEC.md), експлуатація —
 [README.md](README.md), історія і факти про залізо — [docs/GENERATOR_MODBUS_CONTEXT.md](docs/GENERATOR_MODBUS_CONTEXT.md).
 Документація і коментарі до задачі — українською; код, ідентифікатори, docstrings — англійською.
 

@@ -6,8 +6,10 @@ Prometheus скрейпить його напряму (`/metrics`), без textf
 
 - Протокол — бібліотека [pymodbus](https://github.com/pymodbus-dev/pymodbus) (тільки FC03,
   читання; експортер ніколи нічого не пише в контролер).
-- Регістри розбиті на групи з власними інтервалами: на кожен скрейп читаються лише живі
-  значення генератора, двигуна і мережі (7 запитів), решта — рідше або взагалі ні (див. нижче).
+- Розрахований на схему **AMF** із трансформаторами струму на виході генератора (див. нижче).
+- Регістри розбиті на групи з власними інтервалами: на кожен скрейп читаються живі значення
+  генератора і двигуна, напруга мережі та прапорці стану AMF (7 запитів), решта — рідше або
+  взагалі ні; таблиці аварій — лише коли контролер сигналізує аварію (див. нижче).
 - Дешборда Grafana: [dashboards/generator.json](dashboards/generator.json).
 - Короткий кеш (`--min-poll-interval`, 5 с): кілька Prometheus (HA-пара) звертаються до
   контролера один раз.
@@ -50,6 +52,21 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 - Опційно для всієї системи: `Storage=volatile` у `/etc/systemd/journald.conf`
   (журнал лише в RAM) — це вже рішення для всього хоста.
 
+## Схема підключення: AMF, CT на виході генератора
+
+Контролер працює як AMF (automatic mains failure): стежить за мережею, при аварії мережі
+запускає двигун і перекидає навантаження контакторами. Трансформатори струму стоять на виході
+генератора (мануал D-300 MK3, розділ 5.1, «CT Location» = alternator), тому:
+
+- струм, потужність, PF, kVA і kWh вимірюються **лише для генератора**;
+- для мережі контролер міряє тільки **напругу і частоту**; струм/потужність/kWh мережі —
+  нулі, тому вони в групі `extended` (вимкнена) і не показуються на дешборді;
+- стан AMF — з **прапорців функцій** (11555, 224 біти): `mains_fail`, `mains_contactor`,
+  `genset_contactor`, `auto_ready`, `not_in_auto`, `engine_running`, зведені аварії тощо.
+
+Якщо CT колись перенесуть на бік навантаження, контролер показуватиме струм і потужність
+мережі (залежно від контакторів) — тоді достатньо перенести ці регістри в групу `mains`.
+
 ## Конфігурація
 
 Кожна опція — аргумент CLI або змінна оточення (`/etc/default/datakom-exporter`):
@@ -65,7 +82,7 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 | `DATAKOM_REQUEST_DELAY` | 0 | пауза між блоками, с (якщо контролер не встигає) |
 | `DATAKOM_LISTEN` | `:9725` | адреса HTTP |
 | `DATAKOM_MIN_POLL_INTERVAL` | 5 | скрейпи в межах цього часу беруть попереднє опитування |
-| `DATAKOM_GROUPS` | `live=0,mains=0,alarms=60,counters=300,info=3600` | групи опитування та інтервали, с |
+| `DATAKOM_GROUPS` | `live=0,mains=0,flags=0,alarms=60,counters=300,info=3600` | групи опитування та інтервали, с |
 | `DATAKOM_LOG_LEVEL` | WARNING | |
 
 ### Групи опитування
@@ -77,21 +94,36 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 
 | Група | Інтервал за замовч. | Запитів | Що |
 |---|---|---|---|
-| `live` | 0 (кожен скрейп) | 6 | генератор: U, I, kW по фазах і загальна, kVA, PF, Hz; батарея, зарядний вхід, тиск масла, температура ОР і масла, паливо, rpm, статус, режим |
-| `mains` | 0 (кожен скрейп) | +1 | мережа: U, I, kW по фазах і загальна, kVA, PF, Hz (разом із `live` — 7 запитів) |
-| `alarms` | 60 с | 3 | таблиці аварій shutdown / loaddump / warning (для алертів) |
+| `live` | 0 (кожен скрейп) | 6 | генератор: U, I, kW по фазах і загальна, kVA, PF, Hz; батарея, зарядний вхід, тиск масла, температура ОР і масла, паливо, rpm, статус, режим, таймер стану |
+| `mains` | 0 (кожен скрейп) | +0 | мережа: U і Hz (у тих самих блоках, що й `live`) |
+| `flags` | 0 (кожен скрейп) | +1 | прапорці функцій: аварія мережі, контактори, auto ready, двигун працює, зведені аварії, запити на сервіс… |
+| `alarms` | 60 с | 0 / 3 | таблиці аварій shutdown / loaddump / warning — лише поки прапорець «є аварія» = 1 (див. нижче) |
 | `counters` | 300 с | 2 | мотогодини, запуски, прокрутки, on-load, kWh, години до сервісу |
 | `info` | 3600 с | 1 | ID контролера, версії HW/SW |
-| `extended` | вимкнено | 5 | лінійні напруги, реактивна потужність, kVArh, години/дні від сервісу, дні до сервісу |
+| `extended` | вимкнено | 6 | лінійні напруги, реактивна потужність, kVArh, години/дні від сервісу, дні до сервісу; струм/потужність/PF/kVA/kWh мережі (нулі при CT на генераторі) |
 
-Приклад: `DATAKOM_GROUPS=live=0,mains=0,alarms=60,counters=300,info=3600,extended=600`. Група, якої
+Приклад: `DATAKOM_GROUPS=live=0,mains=0,flags=0,alarms=60,counters=300,info=3600,extended=600`. Група, якої
 немає в списку (або `=off`), ніколи не читається і не експортується. Значення повільних груп
 між читаннями віддаються з кешу в пам'яті; після втрати зв'язку кеш скидається (застарілі
 значення не експортуються), а після відновлення всі групи читаються одразу.
 `genset_modbus_group_last_read_timestamp_seconds{group}` показує час останнього читання групи.
 
-Недоступний контролер коштує один таймаут підключення, а не таймаут на кожен блок.
-У LAN опитування `live`+`mains` триває ≈0.1 с.
+**Таблиці аварій за прапорцями.** Коли увімкнена група `flags`, три таблиці аварій (3 запити)
+читаються лише тоді, коли прапорець `any_alarm` = 1: одразу при зміні зведених прапорців аварій
+і далі раз на інтервал `alarms`, поки аварія активна. Без активної аварії таблиці відомі як
+нульові і не читаються. Без групи `flags` таблиці читаються просто за інтервалом.
+
+**Навантаження** (симуляція реальним кодом, скрейп кожні 30 с):
+
+| Скрейп | Без аварій | З активною аварією |
+|---|---|---|
+| звичайний | 7 | 7 |
+| щохвилини | 7 | 10 (+3 таблиці) |
+| раз на 5 хв | 9 (+2 лічильники) | 12 |
+| у середньому за хвилину | 14.4 | 17.4 |
+
+При скрейпі раз на 60 с — 7.4 запиту за хвилину без аварій. Недоступний контролер коштує
+один таймаут підключення, а не таймаут на кожен блок. У LAN опитування триває ≈0.1 с.
 
 ## Prometheus
 
@@ -119,6 +151,22 @@ scrape_configs:
 - alert: GensetFuelLow
   expr: genset_fuel_level_percent < 25
   for: 10m
+# AMF
+- alert: MainsFailure
+  expr: genset_flag{flag="mains_fail"} == 1
+- alert: GensetOnLoad
+  expr: genset_flag{flag="genset_contactor"} == 1
+- alert: GensetNotInAuto          # AMF не спрацює
+  expr: genset_flag{flag="not_in_auto"} == 1
+  for: 30m
+- alert: GensetNotReady
+  expr: genset_flag{flag="auto_ready"} == 0 and genset_flag{flag="not_in_auto"} == 0
+  for: 10m
+- alert: MainsFailNoTransfer      # мережа впала, а навантаження не перейшло на генератор
+  expr: genset_flag{flag="mains_fail"} == 1 and genset_flag{flag="genset_contactor"} == 0
+  for: 3m
+- alert: GensetServiceRequest
+  expr: genset_flag{flag=~"service_[123]_request"} == 1
 ```
 
 ## Метрики
@@ -141,8 +189,10 @@ scrape_configs:
 | `genset_battery_volts`, `genset_charge_input_volts` | 10341, 10340 | |
 | `genset_oil_pressure_bar`, `genset_coolant_temperature_celsius`, `genset_oil_temperature_celsius` | 10361, 10362, 10364 | |
 | `genset_fuel_level_percent`, `genset_engine_rpm` | 10363, 10376 | |
-| `genset_operation_status` | 10604 | 0 resting, 1 waiting, 5 cranking, 6 idle, 7 heating, 8 off load, 13 on load, 20 delay, 22 cooling, 25 stopping |
+| `genset_operation_status` | 10604 | 0–25, повний список — `registers.OPERATION_STATUS` (0 at rest, 5 cranking, 8 off load, 10 transfer to genset, 13 on load, 18 transfer to mains, 22 cooling, 25 stopping…) |
 | `genset_mode` | 10605 | 1 STOP, 2 RUN/MANUAL, 4 AUTO, 8 TEST |
+| `genset_operation_timer_seconds` | 10606 | залишок поточного очікування (затримка аварії мережі, охолодження…) |
+| `genset_flag{flag}` | 11555–11568 | 0/1, 112 названих прапорців функцій — `registers.FUNCTION_FLAGS` |
 | `genset_controller_info{model,device_identity,hw_version,sw_version,word_order}` | 10609–10611 | |
 | `genset_runs_total`, `genset_cranks_total`, `genset_on_load_total` | 10616–10621 | |
 | `genset_engine_hours_total` | 10622 | |
@@ -161,10 +211,11 @@ scrape_configs:
 поруч зі старою "Generator", не перезаписуючи її. Це стара дешборда, переведена на `genset_*` і перебудована в rows:
 **Genset status / mode** (статус, режим, зв'язок з контролером, аварії, батарея, мотогодини
 (загальні і до сервісу 1),
-kWh, запуски / прокрутки), **Mains info** (U, I, P по фазах, частота), **Genset info** (U, I, P по фазах, частота,
+kWh, запуски / прокрутки), **Mains info** (напруга, частота, мережа OK/FAIL, контактори мережі й
+генератора, auto ready, двигун, таймер стану), **Genset info** (U, I, P по фазах, частота,
 історія потужності), **Engine info** (rpm, тиск і температура масла, ОР, зарядний вхід,
-паливо, графік двигуна: оберти, температури, тиск масла, паливо — кожне на власній осі Y), **Run timeline** (статус
-і режим у часі). Зроблена зі старої версії (`legacy/grafana_gist.json`), стилі
+паливо, графік двигуна: оберти, температури, тиск масла, паливо — кожне на власній осі Y), **Run timeline** (статус,
+режим і стан AMF у часі: аварія мережі, контактори, двигун). Зроблена зі старої версії (`legacy/grafana_gist.json`), стилі
 панелей збережені. Ще не перевірялась у Grafana. Джерело — сам JSON: правте його (або
 експортуйте з Grafana після змін) і перевіряйте `pytest tests/test_groups.py`.
 

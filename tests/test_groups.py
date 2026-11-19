@@ -42,8 +42,12 @@ DASHBOARD = [
     "genset_charge_input_volts",
     'genset_voltage_ln_volts{phase="L1",source="mains"}',
     'genset_frequency_hertz{source="mains"}',
-    'genset_power_factor{source="mains"}',
+    'genset_flag{flag="mains_fail"}',
+    'genset_flag{flag="mains_contactor"}',
+    'genset_flag{flag="genset_contactor"}',
+    "genset_operation_timer_seconds",
 ]
+NON_ALARM_DEFAULTS = [g for g in DEFAULT_GROUP_INTERVALS if g != "alarms"]
 
 
 class Clock:
@@ -90,7 +94,11 @@ def test_default_groups_skip_unused_registers(make_controller, make_collector):
                                  "genset_service_hours_since")) for k in got)
     assert 'genset_service_hours_to{service="1"}' in got
     assert 'genset_active_power_kilowatts{phase="L1",source="genset"}' in got
-    assert 'genset_active_power_kilowatts{phase="L1",source="mains"}' in got
+    # AMF with CTs on the alternator: mains current/power/PF are not measured, not exported
+    assert not any('source="mains"' in k and k.startswith(
+        ("genset_current", "genset_active_power", "genset_power_factor", "genset_apparent"))
+        for k in got)
+    assert 'genset_flag{flag="mains_fail"}' in got
     assert "genset_controller_info" in " ".join(got)
     assert 'genset_alarms{class="warning"}' in got
 
@@ -98,7 +106,8 @@ def test_default_groups_skip_unused_registers(make_controller, make_collector):
 def test_live_poll_is_small():
     # charge input and oil temperature ride along in existing blocks
     assert len(read_plan(["live"])) <= 6
-    assert len(read_plan(["live", "mains"])) <= 7
+    assert len(read_plan(["live", "mains"])) <= 6     # mains V and Hz share live's blocks
+    assert len(read_plan(["live", "mains", "flags"])) <= 7
     assert len(read_plan(DEFAULT_GROUP_INTERVALS)) < len(read_plan(GROUPS))
 
 
@@ -119,24 +128,24 @@ def test_schedule(make_controller, make_collector):
         assert all(set(group_addresses(g)) <= covered for g in read)
         return got, read
 
-    got, read = poll_at(0)
+    got, read = poll_at(0)                       # fixture has an active warning flag
     assert read == set(DEFAULT_GROUP_INTERVALS)
-    assert len(reqs) == len(read_plan(DEFAULT_GROUP_INTERVALS))
+    assert len(reqs) == len(read_plan(NON_ALARM_DEFAULTS)) + len(read_plan(["alarms"]))
 
     got, read = poll_at(2)                       # within min_poll_interval: cached
     assert reqs == []
 
-    got, read = poll_at(30)                      # only live + mains
-    assert read == {"live", "mains"}
-    assert reqs == read_plan(["live", "mains"])
+    got, read = poll_at(30)                      # only the per-scrape groups
+    assert read == {"live", "mains", "flags"}
+    assert reqs == read_plan(["live", "mains", "flags"])
     assert got["genset_engine_hours_total"] == 700.0  # slow values served from cache
     assert 'genset_alarms{class="warning"}' in got
 
     _, read = poll_at(61)
-    assert read == {"live", "mains", "alarms"}
+    assert read == {"live", "mains", "flags", "alarms"}
 
     _, read = poll_at(301)
-    assert read == {"live", "mains", "alarms", "counters"}
+    assert read == {"live", "mains", "flags", "alarms", "counters"}
 
     _, read = poll_at(3601)
     assert read == set(DEFAULT_GROUP_INTERVALS)
@@ -170,7 +179,108 @@ def test_connection_loss_drops_cache_and_rereads_everything(make_collector):
         got = scrape(col)
     assert got["genset_modbus_up"] == 1
     assert got["genset_engine_hours_total"] == 700.0
-    assert len(reqs) == len(read_plan(DEFAULT_GROUP_INTERVALS))
+    assert len(reqs) == len(read_plan(NON_ALARM_DEFAULTS)) + len(read_plan(["alarms"]))
+
+
+# --- alarm tables gated by the controller's alarm flags ---------------------------------------------
+def rest_words():
+    return fixture_words(load_fixture(FIXTURES / "d300mk3_rest.json"))
+
+
+def alarm_requests(reqs):
+    tables = set(group_addresses("alarms"))
+    return [(s, c) for s, c in reqs if tables & set(range(s, s + c))]
+
+
+def test_alarm_tables_not_read_without_alarm_flag(make_controller, make_collector):
+    clock = Clock()
+    sim = make_controller(rest_words())                  # no alarm flags set
+    col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS, clock=clock)
+    reqs = record_requests(col)
+    for t in (0, 30, 61, 121, 301):
+        clock.t = 1000.0 + t
+        got = scrape(col)
+        assert got['genset_alarms{class="shutdown"}'] == 0
+        assert got['genset_alarms{class="warning"}'] == 0
+    assert alarm_requests(reqs) == []
+
+
+class FakeReader:
+    """In-memory controller: registers can change between scrapes without reconnecting."""
+
+    host, port = "fake", 0
+
+    def __init__(self, words):
+        self.words = dict(words)
+        self.requests = []
+
+    def poll(self, plan):
+        from datakom_exporter.modbus import Snapshot
+
+        self.requests.extend(plan)
+        got = {a: self.words[a] for s, c in plan for a in range(s, s + c) if a in self.words}
+        return Snapshot(words=got, requests=len(plan), connected=True, timestamp=0.0)
+
+    def close(self):
+        pass
+
+
+def test_alarm_flag_triggers_immediate_table_read():
+    from modbus_sim import flag_words
+
+    from datakom_exporter.collector import DatakomCollector
+
+    clock = Clock()
+    reader = FakeReader(rest_words())
+    col = DatakomCollector(reader, groups=DEFAULT_GROUP_INTERVALS, min_poll_interval=0, clock=clock)
+    scrape(col)
+    assert alarm_requests(reader.requests) == []
+
+    # a warning appears 10 s later - before the 60 s alarm interval: read at once
+    reader.words.update(flag_words(["warning_alarm", "any_alarm"], base=reader.words))
+    reader.words[10537] = 0b10                            # warning table bit 17
+    clock.t += 10
+    reader.requests.clear()
+    got = scrape(col)
+    assert len(alarm_requests(reader.requests)) == 3
+    assert got['genset_alarm_active{bit="17",class="warning"}'] == 1
+    assert got['genset_alarms{class="warning"}'] == 1
+
+    # same summary, interval not due: tables are not read again
+    clock.t += 30
+    reader.requests.clear()
+    scrape(col)
+    assert alarm_requests(reader.requests) == []
+
+    # interval due and the alarm still active: read again
+    clock.t += 31
+    reader.requests.clear()
+    scrape(col)
+    assert len(alarm_requests(reader.requests)) == 3
+
+    # alarm cleared: zero, without reading the tables
+    for a in list(reader.words):
+        if 11555 <= a < 11569 or 10504 <= a < 10552:
+            reader.words[a] = 0
+    clock.t += 10
+    reader.requests.clear()
+    got = scrape(col)
+    assert alarm_requests(reader.requests) == []
+    assert got['genset_alarms{class="warning"}'] == 0
+    assert 'genset_alarm_active{bit="17",class="warning"}' not in got
+
+
+def test_without_flags_group_alarm_tables_follow_interval(make_controller, make_collector):
+    clock = Clock()
+    sim = make_controller(rest_words())
+    col = make_collector(sim.port, groups={"live": 0, "alarms": 60}, clock=clock)
+    reqs = record_requests(col)
+    scrape(col)
+    assert len(alarm_requests(reqs)) == 3
+    reqs.clear()
+    clock.t += 61
+    scrape(col)
+    assert len(alarm_requests(reqs)) == 3
 
 
 def test_parse_groups():

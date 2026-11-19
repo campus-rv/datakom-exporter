@@ -81,6 +81,23 @@
   "genset_alarms{class=\"warning\"}": 2,
   "genset_alarm_active{bit=\"3\",class=\"shutdown\"}": 1,
   "genset_alarm_active{bit=\"0\",class=\"warning\"}": 1,
-  "genset_alarm_active{bit=\"31\",class=\"warning\"}": 1
- }
+  "genset_alarm_active{bit=\"31\",class=\"warning\"}": 1,
+  "genset_flag{flag=\"genset_contactor\"}": 1,
+  "genset_flag{flag=\"mains_contactor\"}": 0,
+  "genset_flag{flag=\"mains_fail\"}": 1,
+  "genset_flag{flag=\"shutdown_alarm\"}": 1,
+  "genset_flag{flag=\"any_alarm\"}": 1,
+  "genset_flag{flag=\"auto_ready\"}": 0
+ },
+ "flags": [
+  "genset_contactor",
+  "mains_fail",
+  "engine_running",
+  "genset_voltage_ok",
+  "auto_mode",
+  "shutdown_alarm",
+  "warning_alarm",
+  "shutdown_or_loaddump",
+  "any_alarm"
+ ]
 }

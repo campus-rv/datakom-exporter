@@ -27,6 +27,13 @@
   "genset_power_factor{source=\"genset\"}": 1.0,
   "genset_engine_hours_total": 175.91,
   "genset_voltage_ln_volts{phase=\"L1\",source=\"genset\"}": 0,
-  "genset_alarms{class=\"shutdown\"}": 0
- }
+  "genset_alarms{class=\"shutdown\"}": 0,
+  "genset_flag{flag=\"off_mode\"}": 1,
+  "genset_flag{flag=\"any_alarm\"}": 0
+ },
+ "flags": [
+  "off_mode",
+  "genset_at_rest",
+  "not_in_auto"
+ ]
 }

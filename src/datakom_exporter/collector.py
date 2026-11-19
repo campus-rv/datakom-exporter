@@ -4,6 +4,10 @@ Registers are split into polling groups (registers.GROUPS), each with its own in
 A scrape reads only the groups that are due; values of the other enabled groups come
 from the cache. Disabled groups are never read. After a connection failure the cache is
 dropped, so no stale values are exported while the controller is unreachable.
+
+With the "flags" group enabled, the three alarm tables (3 requests) are read only while the
+controller's "any alarm" flag is set - when the alarm interval is due or as soon as the alarm
+summary flags change. Without an active alarm the tables are known to be all zero.
 """
 
 from __future__ import annotations
@@ -21,6 +25,11 @@ from .registers import (
     ALARM_BLOCKS,
     ALARM_WORDS,
     DEFAULT_GROUP_INTERVALS,
+    FLAG_ALARM_SUMMARY,
+    FLAG_ANY_ALARM,
+    FLAGS_ADDR,
+    FLAGS_WORDS,
+    FUNCTION_FLAGS,
     HW_VERSION_ADDR,
     IDENTITY_ADDR,
     REGISTERS,
@@ -64,6 +73,7 @@ class DatakomCollector(Collector):
         self._group_read_at: dict[str, float] = {}  # monotonic time of last read attempt
         self._group_ok_ts: dict[str, float] = {}    # unix time of last successful read
         self._was_up: bool | None = None
+        self._alarm_summary_at_read: tuple[int, ...] | None = None
         self.polls_total = 0
         self.requests_total = 0
         self.request_errors_total = 0
@@ -84,35 +94,77 @@ class DatakomCollector(Collector):
                 self._poll(now)
             return self._snap
 
+    def _flag_bits(self) -> set[int] | None:
+        regs = [self._words.get(FLAGS_ADDR + i) for i in range(FLAGS_WORDS)]
+        if any(v is None for v in regs):
+            return None
+        return set(alarm_bits(regs))  # type: ignore[arg-type]
+
+    def _alarm_summary(self) -> tuple[int, ...] | None:
+        bits = self._flag_bits()
+        return None if bits is None else tuple(b for b in FLAG_ALARM_SUMMARY if b in bits)
+
     def _poll(self, now: float) -> None:
         due = self.due_groups(now)
-        snap = self.reader.poll(read_plan(due)) if due else Snapshot(connected=True,
-                                                                     timestamp=time.time())
+        gate_alarms = "alarms" in self.groups and "flags" in self.groups
+        first = [g for g in due if not (gate_alarms and g == "alarms")]
+        snap = self._read(first)
+        self._apply(snap, first, now)
+
+        if gate_alarms and snap.connected:
+            summary = self._alarm_summary()
+            changed = summary != self._alarm_summary_at_read
+            if "alarms" in due or changed:
+                if summary is not None and FLAG_ANY_ALARM not in summary:
+                    # no active alarm: the tables are all zero, no need to read them
+                    for a in self._group_addrs["alarms"]:
+                        self._words[a] = 0
+                    self._group_read_at["alarms"] = now
+                    self._group_ok_ts["alarms"] = snap.timestamp
+                else:  # alarm active (or flags unreadable): read the tables
+                    snap = self._merge(snap, self._read(["alarms"]))
+                    self._apply(snap, ["alarms"], now)
+                self._alarm_summary_at_read = summary
+
         self._polled_at = now
         self._snap = snap
         self.polls_total += 1
+        self._log_transition(snap)
+
+    def _read(self, groups: list[str]) -> Snapshot:
+        if not groups:
+            return Snapshot(connected=True, timestamp=time.time())
+        snap = self.reader.poll(read_plan(groups))
         self.requests_total += snap.requests
         self.request_errors_total += sum(
             1 for *_, why in snap.failed_blocks if why not in ("not connected", "aborted"))
+        return snap
 
+    @staticmethod
+    def _merge(a: Snapshot, b: Snapshot) -> Snapshot:
+        return Snapshot(words={**a.words, **b.words}, failed_blocks=a.failed_blocks + b.failed_blocks,
+                        requests=a.requests + b.requests, duration=a.duration + b.duration,
+                        timestamp=a.timestamp, connected=a.connected and b.connected)
+
+    def _apply(self, snap: Snapshot, groups: list[str], now: float) -> None:
         if not snap.connected:
             # drop everything: nothing stale is exported, and all groups are re-read on recovery
             self._words.clear()
             self._group_read_at.clear()
-        else:
-            for g in due:
-                addrs = self._group_addrs[g]
-                self._group_read_at[g] = now
-                # Keep what was read; forget what was not (e.g. illegal address on a model
-                # without those registers), so no stale value survives a failed block.
-                for a in addrs:
-                    if a in snap.words:
-                        self._words[a] = snap.words[a]
-                    else:
-                        self._words.pop(a, None)
-                if all(a in snap.words for a in addrs):
-                    self._group_ok_ts[g] = snap.timestamp
-        self._log_transition(snap)
+            self._alarm_summary_at_read = None
+            return
+        for g in groups:
+            addrs = self._group_addrs[g]
+            self._group_read_at[g] = now
+            # Keep what was read; forget what was not (e.g. illegal address on a model
+            # without those registers), so no stale value survives a failed block.
+            for a in addrs:
+                if a in snap.words:
+                    self._words[a] = snap.words[a]
+                else:
+                    self._words.pop(a, None)
+            if all(a in snap.words for a in addrs):
+                self._group_ok_ts[g] = snap.timestamp
 
     @property
     def up(self) -> bool:
@@ -187,6 +239,14 @@ class DatakomCollector(Collector):
         if "alarms" in self.groups:
             yield count
             yield active
+
+        bits = self._flag_bits() if "flags" in self.groups else None
+        if bits is not None:
+            flag = GaugeMetricFamily("genset_flag", "Controller function flag (500-MODBUS 11555)",
+                                     labels=["flag"])
+            for b, name in FUNCTION_FLAGS.items():
+                flag.add_metric([name], 1 if b in bits else 0)
+            yield flag
 
         last = GaugeMetricFamily("genset_modbus_group_last_read_timestamp_seconds",
                                  "Unix time of the last successful read of a polling group",
