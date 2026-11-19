@@ -24,6 +24,7 @@ DATAKOM_LIVE_HOST=<ip> .venv/bin/pytest -m live -v -s   # лише з досту
 - `cli.py` — `serve` / `probe` / `dump`, опції з `DATAKOM_*`.
 - `deploy/` — systemd-юніт, env-файл, `install.sh`.
 - `dashboards/generator.json` — дешборда Grafana (джерело; правити JSON напряму).
+- `alerts/` — правила алертів Grafana і скрипт завантаження.
 - `tests/modbus_sim.py` — тестовий Modbus-сервер pymodbus з JSON-фікстур.
 - `legacy/` — старі скрипти і дешборда з gist; не змінювати, лише для історії.
 
@@ -45,6 +46,10 @@ DATAKOM_LIVE_HOST=<ip> .venv/bin/pytest -m live -v -s   # лише з досту
 - Запити дешборди — лише прості селектори `genset_*{...}` (дозволено `=` і `=~`), без
   арифметики й агрегацій: потрібне значення чи одиницю нормалізує експортер (нова метрика або
   divisor у `registers.py`), а не Grafana. Перевіряє `test_dashboard_query_is_plain_exporter_metric`.
+- Алерти — `alerts/generator-alerts.json` (Grafana-managed, завантаження `alerts/upload.py`):
+  запит A — простий селектор, як у дешборді; пороги — у виразах Grafana (B reduce, C threshold/math).
+  Пороги, що є і на панелях, змінювати разом. Перевіряє `tests/test_alerts.py`. Приклад для
+  Prometheus Alertmanager у README тримати синхронним з JSON.
 - Фікстури: синтетичні — `tests/fixtures/*.json` (поле `source`), дампи справжніх контролерів —
   `tests/fixtures/recorded/` через `datakom-exporter dump`. Не вигадувати дані для D-509.
 - **Не комітити паролі, реальні IP-адреси чи імена хостів інфраструктури** — у документах

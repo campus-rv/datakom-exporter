@@ -133,7 +133,7 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 
 ```yaml
 scrape_configs:
-  - job_name: datakom
+  - job_name: datakom-exporter     # правило datakom-exporter-down шукає саме цей job
     scrape_interval: 30s
     scrape_timeout: 10s
     static_configs:
@@ -141,36 +141,109 @@ scrape_configs:
         labels: {site: campus}
 ```
 
-Приклади алертів:
+## Алерти
+
+Робочі алерти — Grafana-managed правила в [alerts/generator-alerts.json](alerts/generator-alerts.json)
+(формат provisioning Grafana, група "Generator (datakom-exporter)", папка "Alerts", інтервал 1 хв).
+Мітка `group=power` направляє їх наявною політикою сповіщень у Telegram; `severity` — `critical`
+або `warning`. Кожне правило: запит A — простий селектор `genset_*` (як у дешборді), B — `last`,
+C — поріг або math-вираз Grafana. Опис посилається на панель дешборди.
+
+| uid | Умова | for | severity |
+|---|---|---|---|
+| `datakom-mains-fail` | `genset_flag{flag="mains_fail"}` = 1 | 1m | critical |
+| `datakom-engine-running` | `genset_flag{flag="engine_running"}` = 1 | 0 | warning |
+| `datakom-genset-on-load` | `genset_flag{flag="genset_contactor"}` = 1 | 0 | warning |
+| `datakom-mains-voltage` | фаза мережі > 0 і поза 172.5–264.5 В (230 В −25 %/+15 %) | 1m | warning |
+| `datakom-controller-alarm` | `genset_alarm_active` = 1, окремий алерт на кожну аварію з її назвою | 0 | warning для `class="warning"`, інакше critical |
+| `datakom-not-in-auto` | `genset_flag{flag="not_in_auto"}` = 1 (AMF не спрацює) | 15m | warning |
+| `datakom-battery` | батарея поза 11.9–14.8 В | 10m | warning |
+| `datakom-fuel-low` | паливо < 25 % | 10m | warning |
+| `datakom-service-due` | `genset_service_hours_to` < 10 год | 0 | warning |
+| `datakom-exporter-down` | `up{job="datakom-exporter"}` = 0 або немає даних | 5m | critical |
+| `datakom-controller-unreachable` | `genset_modbus_up` = 0 | 5m | critical |
+
+Пороги напруги мережі й батареї збігаються з порогами панелей дешборди.
+
+Завантаження в Grafana (створює або замінює всю групу; потрібен токен service account з правом
+на provisioning алертів):
+
+```sh
+GRAFANA_URL=https://<grafana-url> GRAFANA_TOKEN=<token> python3 alerts/upload.py
+python3 alerts/upload.py --dry-run     # показати тіло запиту
+python3 alerts/upload.py --paused ...  # завантажити призупиненими (до введення в експлуатацію)
+```
+
+Правила завантажуються з `X-Disable-Provenance`, тож їх можна призупиняти в UI; джерело правди —
+JSON у репо. Тест `tests/test_alerts.py` перевіряє селектори, назви прапорців і наявність даних
+з груп за замовчуванням.
+
+### Приклад для Prometheus Alertmanager
+
+Не розгортається, лише приклад тих самих правил для Prometheus (тут умови — у PromQL). Для
+kube-prometheus-stack загорніть `groups` у `PrometheusRule` (`spec.groups`, з міткою, яку вибирає
+`ruleSelector`) і додайте в Alertmanager receiver і route для `group="power"`.
 
 ```yaml
-- alert: GensetControllerDown
-  expr: genset_modbus_up == 0 or absent(genset_modbus_up)
-  for: 5m
-- alert: GensetShutdownAlarm
-  expr: genset_alarms{class="shutdown"} > 0
-- alert: GensetBatteryLow
-  expr: genset_battery_volts < 12.2 and genset_engine_rpm == 0
-  for: 30m
-- alert: GensetFuelLow
-  expr: genset_fuel_level_percent < 25
-  for: 10m
-# AMF
-- alert: MainsFailure
-  expr: genset_flag{flag="mains_fail"} == 1
-- alert: GensetOnLoad
-  expr: genset_flag{flag="genset_contactor"} == 1
-- alert: GensetNotInAuto          # AMF не спрацює
-  expr: genset_flag{flag="not_in_auto"} == 1
-  for: 30m
-- alert: GensetNotReady
-  expr: genset_flag{flag="auto_ready"} == 0 and genset_flag{flag="not_in_auto"} == 0
-  for: 10m
-- alert: MainsFailNoTransfer      # мережа впала, а навантаження не перейшло на генератор
-  expr: genset_flag{flag="mains_fail"} == 1 and genset_flag{flag="genset_contactor"} == 0
-  for: 3m
-- alert: GensetServiceRequest
-  expr: genset_flag{flag=~"service_[123]_request"} == 1
+groups:
+  - name: datakom-exporter
+    rules:
+      - alert: MainsFail
+        expr: genset_flag{flag="mains_fail"} == 1
+        for: 1m
+        labels: {group: power, severity: critical}
+        annotations: {summary: "Mains fail"}
+      - alert: GensetEngineRunning
+        expr: genset_flag{flag="engine_running"} == 1
+        labels: {group: power, severity: warning}
+        annotations: {summary: "Genset engine is running"}
+      - alert: GensetOnLoad
+        expr: genset_flag{flag="genset_contactor"} == 1
+        labels: {group: power, severity: warning}
+        annotations: {summary: "Genset is on load"}
+      - alert: MainsVoltageOutOfRange
+        expr: genset_voltage_ln_volts{source="mains"} > 0
+          and (genset_voltage_ln_volts{source="mains"} < 172.5 or genset_voltage_ln_volts{source="mains"} > 264.5)
+        for: 1m
+        labels: {group: power, severity: warning}
+        annotations: {summary: "Mains {{ $labels.phase }} = {{ $value }} V"}
+      - alert: GensetControllerAlarm
+        expr: genset_alarm_active{class=~"shutdown|loaddump"} == 1
+        labels: {group: power, severity: critical}
+        annotations: {summary: "Controller {{ $labels.class }} alarm: {{ $labels.name }}"}
+      - alert: GensetControllerWarning
+        expr: genset_alarm_active{class="warning"} == 1
+        labels: {group: power, severity: warning}
+        annotations: {summary: "Controller warning: {{ $labels.name }}"}
+      - alert: GensetNotInAuto
+        expr: genset_flag{flag="not_in_auto"} == 1
+        for: 15m
+        labels: {group: power, severity: warning}
+        annotations: {summary: "Controller is not in AUTO"}
+      - alert: GensetBatteryOutOfRange
+        expr: genset_battery_volts < 11.9 or genset_battery_volts > 14.8
+        for: 10m
+        labels: {group: power, severity: warning}
+        annotations: {summary: "Battery = {{ $value }} V"}
+      - alert: GensetFuelLow
+        expr: genset_fuel_level_percent < 25
+        for: 10m
+        labels: {group: power, severity: warning}
+        annotations: {summary: "Fuel level {{ $value }} %"}
+      - alert: GensetServiceDue
+        expr: genset_service_hours_to < 10
+        labels: {group: power, severity: warning}
+        annotations: {summary: "Service {{ $labels.service }} due in {{ $value }} h"}
+      - alert: DatakomExporterDown
+        expr: up{job="datakom-exporter"} == 0 or absent(up{job="datakom-exporter"})
+        for: 5m
+        labels: {group: power, severity: critical}
+        annotations: {summary: "datakom-exporter is down"}
+      - alert: DatakomControllerUnreachable
+        expr: genset_modbus_up == 0
+        for: 5m
+        labels: {group: power, severity: critical}
+        annotations: {summary: "Datakom controller unreachable"}
 ```
 
 ## Метрики

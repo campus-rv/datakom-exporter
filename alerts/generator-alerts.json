@@ -1,0 +1,906 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "Generator (datakom-exporter)",
+      "folder": "Alerts",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "datakom-mains-fail",
+          "title": "Mains fail",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_flag{flag=\"mains_fail\"}",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "1m",
+          "annotations": {
+            "summary": "Mains fail",
+            "description": "Controller reports mains failure; AMF should start the genset.",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "13"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "critical"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-engine-running",
+          "title": "Genset engine running",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_flag{flag=\"engine_running\"}",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "annotations": {
+            "summary": "Genset engine is running",
+            "description": "Engine running (test, manual or AMF start).",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "17"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "warning"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-genset-on-load",
+          "title": "Genset on load",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_flag{flag=\"genset_contactor\"}",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "annotations": {
+            "summary": "Genset is on load",
+            "description": "Genset contactor closed: the load is fed by the generator.",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "15"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "warning"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-mains-voltage",
+          "title": "Mains voltage out of range",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_voltage_ln_volts{source=\"mains\"}",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "math",
+                "expression": "$B > 0 && ($B < 172.5 || $B > 264.5)",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "1m",
+          "annotations": {
+            "summary": "Mains voltage {{ $labels.phase }} out of range",
+            "description": "Mains {{ $labels.phase }} = {{ humanize $values.B.Value }} V (allowed 172.5..264.5 V, 230 V -25%/+15%).",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "11"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "warning"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-controller-alarm",
+          "title": "Controller alarm",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_alarm_active",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "annotations": {
+            "summary": "Controller {{ $labels.class }} alarm: {{ $labels.name }}",
+            "description": "Datakom {{ $labels.class }} alarm bit {{ $labels.bit }}: {{ $labels.name }}.",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "5"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "{{ if eq $labels.class \"warning\" }}warning{{ else }}critical{{ end }}"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-not-in-auto",
+          "title": "Controller not in AUTO",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_flag{flag=\"not_in_auto\"}",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "15m",
+          "annotations": {
+            "summary": "Controller is not in AUTO",
+            "description": "AMF will not start the genset on mains failure until the controller is switched to AUTO.",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "3"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "warning"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-battery",
+          "title": "Battery voltage out of range",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_battery_volts",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "outside_range",
+                      "params": [
+                        11.9,
+                        14.8
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "annotations": {
+            "summary": "Battery voltage out of range",
+            "description": "Battery = {{ humanize $values.B.Value }} V (allowed 11.9..14.8 V).",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "6"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "warning"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-fuel-low",
+          "title": "Fuel level low",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_fuel_level_percent",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        25
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "annotations": {
+            "summary": "Fuel level low",
+            "description": "Fuel level {{ humanize $values.B.Value }} % (below 25 %).",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "32"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "warning"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-service-due",
+          "title": "Service due",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_service_hours_to",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        10
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "annotations": {
+            "summary": "Service {{ $labels.service }} due",
+            "description": "{{ humanize $values.B.Value }} engine hours left to service {{ $labels.service }}.",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "7"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "warning"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-exporter-down",
+          "title": "datakom-exporter down",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "up{job=\"datakom-exporter\"}",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        0.5
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "for": "5m",
+          "annotations": {
+            "summary": "datakom-exporter is down",
+            "description": "Prometheus cannot scrape datakom-exporter; generator state is unknown.",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "4"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "critical"
+          },
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-controller-unreachable",
+          "title": "Controller unreachable",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_modbus_up",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        0.5
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "annotations": {
+            "summary": "Datakom controller unreachable",
+            "description": "datakom-exporter cannot read the controller over Modbus TCP.",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "4"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "critical"
+          },
+          "isPaused": false
+        }
+      ]
+    }
+  ]
+}
