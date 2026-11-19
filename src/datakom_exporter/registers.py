@@ -23,13 +23,15 @@ WORD_ORDERS = ("low_first", "high_first")
 # a group that is switched off is never read from the controller and never exported.
 GROUPS = ("live", "alarms", "counters", "info", "mains", "extended")
 GROUP_HELP = {
-    "live": "genset voltage/current/power/PF/frequency, battery, charge input, oil pressure, "
+    "live": "genset voltage/current/per-phase and total power/PF/frequency, battery, charge input, oil pressure, "
             "oil and coolant temperature, fuel, rpm, status, mode",
     "alarms": "shutdown / loaddump / warning alarm tables (3 requests)",
-    "counters": "engine hours, runs, cranks, on-load events, genset kWh (1 request)",
+    "counters": "engine hours, runs, cranks, on-load events, genset kWh, hours to service "
+                "(2 requests)",
     "info": "device identity, hardware and software version (1 request)",
-    "mains": "mains voltage, current, power, PF, frequency",
-    "extended": "line-to-line voltages, per-phase and reactive power, kVArh, service counters",
+    "mains": "mains voltage, current, per-phase and total power, PF, frequency",
+    "extended": "line-to-line voltages, reactive power, kVArh, hours/days since service, "
+                "days to service",
 }
 # seconds between reads; 0 = on every poll (i.e. every scrape, limited by --min-poll-interval).
 # Chosen from the 'Generator' dashboard (dashboards/generator.json): live genset and mains
@@ -85,8 +87,9 @@ for _src, _v, _ll, _i in (("mains", 10240, 10252, 10264), ("genset", 10246, 1025
              "Phase current", source=_src, phase=_ph)
 
 for _src, _p in (("mains", 10280), ("genset", 10286)):
+    _g = "live" if _src == "genset" else "mains"
     for _n, _ph in enumerate(("L1", "L2", "L3")):
-        _reg("extended", "genset_active_power_kilowatts", _p + 2 * _n, 2, True, 10,
+        _reg(_g, "genset_active_power_kilowatts", _p + 2 * _n, 2, True, 10,
              "Active power", source=_src, phase=_ph)
 
 for _src, _p, _q, _s, _pf, _f in (("mains", 10292, 10308, 10324, 10334, 10338),
@@ -134,7 +137,7 @@ _reg("extended", "genset_reactive_energy_kilovarhours_total", 10632, 2, False, 1
 _reg("extended", "genset_service_hours_since", 10624, 2, False, 100, "Engine hours since last service")
 _reg("extended", "genset_service_days_since", 10626, 2, False, 100, "Days since last service")
 for _n, _a in enumerate((10634, 10638, 10642), start=1):
-    _reg("extended", "genset_service_hours_to", _a, 2, True, 100, "Engine hours to service",
+    _reg("counters", "genset_service_hours_to", _a, 2, True, 100, "Engine hours to service",
          service=str(_n))
     _reg("extended", "genset_service_days_to", _a + 2, 2, True, 100, "Days to service",
          service=str(_n))

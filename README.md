@@ -77,12 +77,12 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 
 | Група | Інтервал за замовч. | Запитів | Що |
 |---|---|---|---|
-| `live` | 0 (кожен скрейп) | 6 | генератор: U, I, kW, kVA, PF, Hz; батарея, зарядний вхід, тиск масла, температура ОР і масла, паливо, rpm, статус, режим |
-| `mains` | 0 (кожен скрейп) | +1 | мережа: U, I, kW, kVA, PF, Hz (разом із `live` — 7 запитів) |
+| `live` | 0 (кожен скрейп) | 6 | генератор: U, I, kW по фазах і загальна, kVA, PF, Hz; батарея, зарядний вхід, тиск масла, температура ОР і масла, паливо, rpm, статус, режим |
+| `mains` | 0 (кожен скрейп) | +1 | мережа: U, I, kW по фазах і загальна, kVA, PF, Hz (разом із `live` — 7 запитів) |
 | `alarms` | 60 с | 3 | таблиці аварій shutdown / loaddump / warning (для алертів) |
-| `counters` | 300 с | 1 | мотогодини, запуски, прокрутки, on-load, kWh |
+| `counters` | 300 с | 2 | мотогодини, запуски, прокрутки, on-load, kWh, години до сервісу |
 | `info` | 3600 с | 1 | ID контролера, версії HW/SW |
-| `extended` | вимкнено | 5 | лінійні напруги, помфазна і реактивна потужність, kVArh, сервісні лічильники |
+| `extended` | вимкнено | 5 | лінійні напруги, реактивна потужність, kVArh, години/дні від сервісу, дні до сервісу |
 
 Приклад: `DATAKOM_GROUPS=live=0,mains=0,alarms=60,counters=300,info=3600,extended=600`. Група, якої
 немає в списку (або `=off`), ніколи не читається і не експортується. Значення повільних груп
@@ -156,14 +156,21 @@ scrape_configs:
 
 ### Дашборда "Generator"
 
-[dashboards/generator.json](dashboards/generator.json) — та сама дешборда (uid
-`da70dbbf-…`, імпорт замінить поточну), переведена на `genset_*` і перебудована в rows:
-**Genset status / mode** (статус, режим, зв'язок з контролером, аварії), **Mains info**,
-**Genset info** (U, I, потужність, частота, kWh, лічильники), **Engine info** (rpm, тиск і
-температура масла, ОР, батарея, зарядний вхід, паливо, мотогодини), **Run timeline**
-(статус і режим у часі). Зроблена зі старої версії (`legacy/grafana_gist.json`), стилі
+[dashboards/generator.json](dashboards/generator.json) — нова дешборда **"Generator
+(datakom-exporter)"** з власним uid `21ec9aa7-edb0-4f77-87be-d054eb9f0b39`: імпорт створює її
+поруч зі старою "Generator", не перезаписуючи її. Це стара дешборда, переведена на `genset_*` і перебудована в rows:
+**Genset status / mode** (статус, режим, зв'язок з контролером, аварії, батарея, мотогодини
+(загальні і до сервісу 1),
+kWh, запуски / прокрутки), **Mains info** (U, I, P по фазах, частота), **Genset info** (U, I, P по фазах, частота,
+історія потужності), **Engine info** (rpm, тиск і температура масла, ОР, зарядний вхід,
+паливо, графік двигуна: оберти, температури, тиск масла, паливо — кожне на власній осі Y), **Run timeline** (статус
+і режим у часі). Зроблена зі старої версії (`legacy/grafana_gist.json`), стилі
 панелей збережені. Ще не перевірялась у Grafana. Джерело — сам JSON: правте його (або
 експортуйте з Grafana після змін) і перевіряйте `pytest tests/test_groups.py`.
+
+Кожен запит дешборди — простий селектор метрики `genset_*`, без арифметики: одиниці,
+масштаб і потужність по фазах нормалізує експортер. Тест `test_dashboard_query_is_plain_exporter_metric`
+падає на будь-якому `* / + sum(...)` у запиті.
 
 Заміна запитів (для довідки):
 
@@ -173,7 +180,7 @@ scrape_configs:
 | `gen_phaseN_current*0.1` | `genset_current_amperes{source="genset",phase="LN"}` |
 | `gen_total_active_power*0.1` | `genset_active_power_kilowatts{source="genset",phase="total"}` |
 | `gen_total_apparent_power*0.1` | `genset_apparent_power_kilovoltamperes{source="genset",phase="total"}` |
-| `gen_total_power_factor*0.1` (%) | `genset_power_factor{source="genset"} * 100` |
+| `gen_total_power_factor*0.1` (%) | `genset_power_factor{source="genset"}` (−1…1, одиниця `percentunit`) |
 | `gen_frequency/100` | `genset_frequency_hertz{source="genset"}` |
 | `gen_battery_voltage/100` | `genset_battery_volts` |
 | `gen_oil_pressure/10` | `genset_oil_pressure_bar` |
@@ -184,9 +191,10 @@ scrape_configs:
 | `gen_engine_hours_run/100` | `genset_engine_hours_total` |
 | змінна `label_values(gen_mode, instance)` | `label_values(genset_mode, instance)` |
 
-Панель "Power" (timeseries) рахувала потужність як I×U по фазах — так і лишається
-(`genset_current_amperes * genset_voltage_ln_volts`, обидві в групі `live`);
-помфазна активна потужність є в групі `extended`, якщо її увімкнути.
+Панель "Power" (timeseries) рахувала потужність як I×U по фазах. Тепер експортер віддає
+активну потужність по фазах з контролера (регістри 10280–10291):
+`genset_active_power_kilowatts{source="genset",phase=~"L[123]"}` — без додаткових запитів,
+ці регістри потрапляють в уже наявні блоки.
 
 ## Розробка і тести
 

@@ -121,7 +121,7 @@ D-509 має кнопки MAN і RUN (як D-500), тож коди режимі�
 - Опитування за групами (`DATAKOM_GROUPS`): `live` (генератор, двигун, включно з температурою
   масла і зарядним входом) і `mains` — кожен скрейп, разом 7 запитів; `alarms` 60 с,
   `counters` 300 с, `info` 3600 с; `extended` вимкнено.
-- Нова дешборда: `dashboards/generator.json` (rows: Genset status / mode, Mains info, Genset info,
+- Нова дешборда: `dashboards/generator.json`, "Generator (datakom-exporter)", окремий uid (rows: Genset status / mode, Mains info, Genset info,
   Engine info, Run timeline), ще не імпортована і не перевірена в Grafana.
 - Адреса контролера не має значення за замовчуванням: `DATAKOM_HOST` обов'язковий.
 - `datakom-exporter probe` (замість `--probe`), `datakom-exporter dump` → фікстура для тестів,
@@ -138,7 +138,9 @@ D-509 має кнопки MAN і RUN (як D-500), тож коди режимі�
 3. `DATAKOM_LIVE_HOST=<ip> pytest -m live -v -s`; `datakom-exporter dump` у
    `tests/fixtures/recorded/` + заповнити `expected` значеннями з дисплея.
 4. Додати target у Prometheus, прибрати старий скрипт і `gen.prom` з <exporter-host>.
-5. Імпортувати `dashboards/generator.json` у Grafana (замінить "Generator") і перевірити.
+5. Імпортувати `dashboards/generator.json` у Grafana — створиться окрема дешборда
+   "Generator (datakom-exporter)", uid `21ec9aa7-edb0-4f77-87be-d054eb9f0b39`; стара "Generator"
+   лишається без змін, поки нова не перевірена.
 6. Алерти: `genset_modbus_up == 0`, `genset_alarms{class="shutdown"} > 0`, низька батарея, рівень палива.
 
 ## Джерела

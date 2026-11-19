@@ -60,6 +60,9 @@
   },
   "10364": {
    "s16": 652
+  },
+  "10634": {
+   "s32": 4321
   }
  },
  "expected": {
@@ -86,6 +89,7 @@
   "genset_alarms{class=\"warning\"}": 1,
   "genset_alarms{class=\"shutdown\"}": 0,
   "genset_alarm_active{bit=\"17\",class=\"warning\"}": 1,
-  "genset_oil_temperature_celsius": 65.2
+  "genset_oil_temperature_celsius": 65.2,
+  "genset_service_hours_to{service=\"1\"}": 43.21
  }
 }

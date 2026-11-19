@@ -86,9 +86,11 @@ def test_default_groups_skip_unused_registers(make_controller, make_collector):
     got = scrape(make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS))
     assert 'genset_voltage_ln_volts{phase="L1",source="mains"}' in got
     assert "genset_oil_temperature_celsius" in got and "genset_charge_input_volts" in got
-    assert not any(k.startswith(("genset_voltage_ll", "genset_reactive", "genset_service"))
-                   for k in got)
-    assert 'genset_active_power_kilowatts{phase="L1",source="genset"}' not in got
+    assert not any(k.startswith(("genset_voltage_ll", "genset_reactive", "genset_service_days",
+                                 "genset_service_hours_since")) for k in got)
+    assert 'genset_service_hours_to{service="1"}' in got
+    assert 'genset_active_power_kilowatts{phase="L1",source="genset"}' in got
+    assert 'genset_active_power_kilowatts{phase="L1",source="mains"}' in got
     assert "genset_controller_info" in " ".join(got)
     assert 'genset_alarms{class="warning"}' in got
 
@@ -186,32 +188,58 @@ def test_groups_from_env(monkeypatch):
     assert a.groups == {"live": 0, "mains": 30}
 
 
-# --- the dashboard shipped in dashboards/ must only need default groups -------------------------
+# --- the dashboard shipped in dashboards/ ---------------------------------------------------------
+# Every query must be a plain selector of an exporter metric: values are normalized (units,
+# scaling, per-phase power) in the exporter, never by arithmetic in Grafana. And every query
+# must have data with the default polling groups.
 DASHBOARD_FILE = FIXTURES.parent.parent / "dashboards" / "generator.json"
-SELECTOR = re.compile(r"\b(genset_[a-z_]+)(?:\{([^}]*)\})?")
+PLAIN_SELECTOR = re.compile(r'(genset_[a-z_]+)(?:\{((?:\s*[a-z_]+\s*(?:=~|=)\s*"[^"]*"\s*,?)*)\})?')
+MATCHER = re.compile(r'([a-z_]+)\s*(=~|=)\s*"([^"]*)"')
+
+
+def dashboard_exprs():
+    d = json.loads(DASHBOARD_FILE.read_text(encoding="utf-8"))
+    return sorted({(p["title"], t["expr"]) for p in d["panels"] for t in p.get("targets", [])})
 
 
 def dashboard_selectors():
-    d = json.loads(DASHBOARD_FILE.read_text(encoding="utf-8"))
     out = set()
-    for p in d["panels"]:
-        for t in p.get("targets", []):
-            for name, labels in SELECTOR.findall(t["expr"]):
-                lab = tuple(sorted((k.strip(), v.strip('"')) for k, _, v in
-                                   (x.partition("=") for x in labels.split(",") if x)
-                                   if k.strip() != "instance"))
-                out.add((name, lab))
+    for _, expr in dashboard_exprs():
+        m = PLAIN_SELECTOR.fullmatch(expr.strip())
+        if m:
+            matchers = tuple(sorted(x for x in MATCHER.findall(m.group(2) or "")
+                                    if x[0] != "instance"))
+            out.add((m.group(1), matchers))
     return sorted(out)
 
 
-@pytest.mark.parametrize("name,labels", dashboard_selectors(),
-                         ids=lambda v: v if isinstance(v, str) else ",".join("=".join(x) for x in v))
-def test_dashboard_query_has_data_with_default_groups(name, labels, make_controller, make_collector):
+@pytest.mark.parametrize("title,expr", dashboard_exprs(), ids=lambda v: v)
+def test_dashboard_query_is_plain_exporter_metric(title, expr):
+    assert PLAIN_SELECTOR.fullmatch(expr.strip()), (
+        f"panel {title!r}: {expr!r} is not a plain genset_* selector - "
+        "normalize the value in the exporter instead")
+
+
+def _matches(labels, matchers):
+    for key, op, value in matchers:
+        got = labels.get(key)
+        if got is None:
+            return False
+        if op == "=" and got != value:
+            return False
+        if op == "=~" and not re.fullmatch(value, got):
+            return False
+    return True
+
+
+@pytest.mark.parametrize("name,matchers", dashboard_selectors(),
+                         ids=lambda v: v if isinstance(v, str) else ",".join("".join(x) for x in v))
+def test_dashboard_query_has_data_with_default_groups(name, matchers, make_controller, make_collector):
     sim = make_controller(running_words())
     col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS)
     reg = CollectorRegistry()
     reg.register(col)
     samples = [s for fam in text_string_to_metric_families(generate_latest(reg).decode())
                for s in fam.samples]
-    assert any(s.name in (name, name + "_total") and set(labels) <= set(s.labels.items())
-               for s in samples), f"no sample for {name}{dict(labels)}"
+    assert any(s.name in (name, name + "_total") and _matches(s.labels, matchers)
+               for s in samples), f"no sample for {name}{matchers}"

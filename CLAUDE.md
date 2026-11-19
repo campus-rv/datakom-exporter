@@ -41,6 +41,9 @@ DATAKOM_LIVE_HOST=<ip> .venv/bin/pytest -m live -v -s   # лише з досту
   замовчуванням (тест `test_dashboard_query_has_data_with_default_groups`).
 - Дешборда і групи змінюються разом: новий запит у `dashboards/generator.json` має отримувати
   дані з `DEFAULT_GROUP_INTERVALS`.
+- Запити дешборди — лише прості селектори `genset_*{...}` (дозволено `=` і `=~`), без
+  арифметики й агрегацій: потрібне значення чи одиницю нормалізує експортер (нова метрика або
+  divisor у `registers.py`), а не Grafana. Перевіряє `test_dashboard_query_is_plain_exporter_metric`.
 - Фікстури: синтетичні — `tests/fixtures/*.json` (поле `source`), дампи справжніх контролерів —
   `tests/fixtures/recorded/` через `datakom-exporter dump`. Не вигадувати дані для D-509.
 - **Не комітити паролі, реальні IP-адреси чи імена хостів інфраструктури** — у документах
