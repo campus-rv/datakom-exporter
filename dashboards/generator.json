@@ -576,25 +576,21 @@
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 14.5,
-          "min": 12,
+          "decimals": 1,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
-              },
-              {
                 "color": "red",
-                "value": 12
+                "value": null
               },
               {
                 "color": "green",
-                "value": 12.6
+                "value": 11.9
               },
               {
                 "color": "red",
-                "value": 15
+                "value": 14.8
               }
             ]
           },
@@ -610,9 +606,11 @@
       },
       "id": 6,
       "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -620,9 +618,9 @@
           "fields": "",
           "values": false
         },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "11.6.1",
       "targets": [
@@ -645,7 +643,7 @@
         }
       ],
       "title": "Battery Voltage",
-      "type": "gauge"
+      "type": "stat"
     },
     {
       "datasource": {
@@ -944,11 +942,11 @@
               },
               {
                 "color": "green",
-                "value": 207
+                "value": 172.5
               },
               {
                 "color": "red",
-                "value": 253
+                "value": 264.5
               }
             ]
           },
@@ -958,8 +956,8 @@
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
+        "graphMode": "area",
+        "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
