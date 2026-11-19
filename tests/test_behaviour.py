@@ -209,3 +209,56 @@ def test_host_is_required(monkeypatch):
     monkeypatch.delenv("DATAKOM_HOST", raising=False)
     with pytest.raises(SystemExit):
         cli.main(["probe"])
+
+
+# --- lost responses (the D-509 MK3 drops a request now and then) -------------------------------
+def _flaky(reader, fail_starts):
+    """Make read_block raise a timeout for the listed block starts (each entry = one failure)."""
+    from pymodbus.exceptions import ModbusIOException
+
+    pending = list(fail_starts)  # block starts; "first" = whatever is requested first
+    orig = reader.read_block
+
+    def read_block(start, count):
+        for key in (start, "first"):
+            if key in pending:
+                pending.remove(key)
+                if key == "first":
+                    pending[:] = [k for k in pending if k != "first"]
+                raise ModbusIOException("No response received")
+        if "first" in pending:
+            pending.remove("first")
+        return orig(start, count)
+
+    reader.read_block = read_block
+
+
+def test_lost_response_is_retried_after_reconnect(make_controller, make_collector):
+    sim = make_controller(rest_words())
+    col = make_collector(sim.port)
+    plan = read_plan(["live"])
+    _flaky(col.reader, [plan[0][0]])
+    snap = col.reader.poll(plan)
+    assert snap.connected and snap.failed_blocks == []
+    assert snap.retried == 1 and snap.requests == len(plan) + 1
+
+
+def test_lost_response_twice_aborts_the_poll(make_controller, make_collector):
+    sim = make_controller(rest_words())
+    col = make_collector(sim.port)
+    plan = read_plan(["live"])
+    _flaky(col.reader, [plan[1][0], plan[1][0]])
+    snap = col.reader.poll(plan)
+    assert not snap.connected
+    assert len(snap.failed_blocks) == len(plan) - 1          # block 0 was read
+    assert [w for *_, w in snap.failed_blocks].count("aborted") == len(plan) - 2
+
+
+def test_retries_are_exported(make_controller, make_collector):
+    sim = make_controller(rest_words())
+    col = make_collector(sim.port)
+    _flaky(col.reader, ["first"])
+    got = scrape(col)
+    assert got["genset_modbus_up"] == 1
+    assert got["genset_modbus_failed_blocks"] == 0
+    assert got["genset_modbus_request_retries_total"] == 1

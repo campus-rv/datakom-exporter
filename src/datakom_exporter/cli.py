@@ -58,7 +58,8 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--timeout", type=float, default=float(_env("DATAKOM_TIMEOUT", "2")),
                    help="per-request timeout, s ($DATAKOM_TIMEOUT)")
     c.add_argument("--retries", type=int, default=int(_env("DATAKOM_RETRIES", "1")),
-                   help="pymodbus retries per request ($DATAKOM_RETRIES)")
+                   help="pymodbus retries on the same connection ($DATAKOM_RETRIES); a lost "
+                        "response is always retried once after a reconnect anyway")
     c.add_argument("--request-delay", type=float, default=float(_env("DATAKOM_REQUEST_DELAY", "0")),
                    help="pause between block requests, s ($DATAKOM_REQUEST_DELAY)")
     s = p.add_argument_group("serve")

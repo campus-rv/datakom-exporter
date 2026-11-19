@@ -60,6 +60,7 @@ class Register:
     help: str = ""
     labels: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     group: str = "extended"
+    na: tuple[int, ...] = ()  # raw 16-bit words meaning "not available" (sensor absent)
 
     @property
     def addresses(self) -> range:
@@ -78,10 +79,15 @@ REGISTERS: list[Register] = []
 
 
 def _reg(group: str, name: str, address: int, words: int = 1, signed: bool = False,
-         divisor: int = 1, help: str = "", **labels: str) -> None:
+         divisor: int = 1, help: str = "", na: tuple[int, ...] = (), **labels: str) -> None:
     assert group in GROUPS, group
     REGISTERS.append(Register(name, address, words, signed, divisor, help,
-                              tuple(sorted(labels.items())), group))
+                              tuple(sorted(labels.items())), group, na))
+
+
+# Analog senders read 0x7FFF when the sensor is not fitted or not configured (seen on the
+# D-509 MK3: oil, canopy and ambient temperature = 32767). Such values are not exported.
+SENSOR_NA = (0x7FFF,)
 
 
 # --- electrical measurements --------------------------------------------------------------------
@@ -124,10 +130,11 @@ for _src, _p, _q, _s, _pf, _f in (("mains", 10292, 10308, 10324, 10334, 10338),
 # --- engine -------------------------------------------------------------------------------------
 _reg("live", "genset_charge_input_volts", 10340, 1, False, 100, "Charge alternator input voltage")
 _reg("live", "genset_battery_volts", 10341, 1, False, 100, "Battery voltage")
-_reg("live", "genset_oil_pressure_bar", 10361, 1, True, 10, "Oil pressure")
-_reg("live", "genset_coolant_temperature_celsius", 10362, 1, True, 10, "Engine coolant temperature")
-_reg("live", "genset_fuel_level_percent", 10363, 1, True, 10, "Fuel level")
-_reg("live", "genset_oil_temperature_celsius", 10364, 1, True, 10, "Oil temperature")
+_reg("live", "genset_oil_pressure_bar", 10361, 1, True, 10, "Oil pressure", na=SENSOR_NA)
+_reg("live", "genset_coolant_temperature_celsius", 10362, 1, True, 10, "Engine coolant temperature",
+     na=SENSOR_NA)
+_reg("live", "genset_fuel_level_percent", 10363, 1, True, 10, "Fuel level", na=SENSOR_NA)
+_reg("live", "genset_oil_temperature_celsius", 10364, 1, True, 10, "Oil temperature", na=SENSOR_NA)
 _reg("live", "genset_engine_rpm", 10376, 1, False, 1, "Engine speed, rpm")
 
 # --- state --------------------------------------------------------------------------------------
@@ -178,11 +185,43 @@ HW_VERSION_ADDR = 10610
 SW_VERSION_ADDR = 10611
 IDENTITY_ADDRESSES = (IDENTITY_ADDR, HW_VERSION_ADDR, SW_VERSION_ADDR)
 
-KNOWN_MODELS: dict[int, str] = {0xD300: "D-300", 0xD500: "D-500", 0xD700: "D-700"}
+# 0xD512 read from the D-509 MK3 on 2026-11-19 (hw 5, sw 648); not in 500-MODBUS.
+KNOWN_MODELS: dict[int, str] = {0xD300: "D-300", 0xD500: "D-500", 0xD700: "D-700", 0xD512: "D-509"}
 
 # --- alarms: 16 registers = 256 bits per class, bit 0 = LSB of the first register ---------------
 ALARM_BLOCKS: dict[str, int] = {"shutdown": 10504, "loaddump": 10520, "warning": 10536}
 ALARM_WORDS = 16
+# 500-MODBUS "List of alarm bits" (same numbering for shutdown, loaddump and warning tables)
+ALARM_NAMES: dict[int, str] = {
+    **{b: f"Digital input {b + 1}" for b in range(8)},
+    **{b: f"Extension input {b - 7}" for b in range(8, 48)},
+    48: "Genset Low Frequency", 49: "Genset High Frequency", 50: "Genset Low RPM",
+    51: "Genset High RPM", 52: "Genset Low Voltage", 53: "Genset High Voltage",
+    54: "Low Oil Pressure", 55: "High Oil Pressure", 56: "Low Engine Temp", 57: "High Engine Temp",
+    58: "Low Fuel Level", 59: "High Fuel Level", 60: "Low Oil Temp", 61: "High Oil Temp",
+    62: "Low Canopy Temp", 63: "High Canopy Temp", 64: "Low Ambient Temp", 65: "High Ambient Temp",
+    **{66 + n: f"Sender {n + 1} Low Level" for n in range(8)},
+    **{74 + n: f"Sender {n + 1} High Level" for n in range(8)},
+    82: "Oil Pressure Sender Open", 83: "Engine Temp Sender Open", 84: "Fuel Level Sender Open",
+    85: "Oil Temp Sender Open", 86: "Canopy Temp Sender Open", 87: "Ambient Temp Sender Open",
+    **{88 + n: f"Sender {n + 1} Open Circuit" for n in range(8)},
+    96: "Low Battery Voltage", 97: "High Battery Voltage", 98: "Fail To Start", 99: "Fail To Stop",
+    100: "Low Charge Voltage", 101: "J1939 ECU Error", 102: "High Air Inlet Temp",
+    103: "Low Coolant Level", 104: "Voltage Unbalance", 105: "Current Unbalance",
+    106: "Over Current", 107: "Over Load", 108: "Reverse Power", 109: "Genset Phase Order Fail",
+    110: "Mains Phase Order Fail", 111: "Genset CB Fail To Close", 112: "Genset CB Fail To Open",
+    113: "Mains CB Fail To Close", 114: "Mains CB Fail To Open", 115: "Device Address Fail",
+    116: "Comm Bus Error", 117: "Excitation Lost", 118: "Service 1 Request",
+    119: "Service 2 Request", 120: "Service 3 Request", 121: "G59 No Mains Freq",
+    122: "G59 Mains Freq Fail", 123: "G59 Mains Reverse Power", 124: "G59 ROCOF df/dt",
+    125: "G59 Vector Shift", 126: "NVM Function Failure", 127: "Communication Lost",
+    128: "Synchronization Fail", 129: "Loss Of Pick-Up Signal", 130: "Unit Not Tested",
+    131: "Wrong Expansion Order", 132: "Busbar Voltage Fail", 133: "Busbar Freq Fail",
+    134: "Min Genset Not Reached", 135: "Dead Bus Volt Exceeded", 136: "Insufficient StartUp Power",
+    137: "Fuel Pump Failure", 138: "Unit Locked", 139: "EEPROM Write Fault",
+    140: "Low Battery-2 Voltage", 141: "High Battery-2 Voltage",
+}
+assert len(ALARM_NAMES) == 142
 
 # --- function flags: 224-bit array, bit 0 = LSB of the first register ----------------------------
 FLAGS_ADDR = 11555
@@ -268,10 +307,10 @@ READ_PLAN: list[tuple[int, int]] = read_plan()
 
 # --- decoding -----------------------------------------------------------------------------------
 def decode(words: Mapping[int, int], address: int, n_words: int, signed: bool,
-           word_order: str) -> int | None:
-    """Return the integer stored at ``address`` or None if any word is missing."""
+           word_order: str, na: tuple[int, ...] = ()) -> int | None:
+    """Return the integer at ``address``; None if a word is missing or marks "not available"."""
     if n_words == 1:
-        if address not in words:
+        if address not in words or words[address] in na:
             return None
         v = words[address]
         return v - 0x10000 if signed and v & 0x8000 else v

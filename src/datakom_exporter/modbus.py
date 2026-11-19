@@ -27,6 +27,7 @@ class Snapshot:
     words: dict[int, int] = field(default_factory=dict)
     failed_blocks: list[tuple[int, int, str]] = field(default_factory=list)
     requests: int = 0
+    retried: int = 0  # blocks that timed out once and were read after a reconnect
     duration: float = 0.0
     timestamp: float = 0.0
     connected: bool = False
@@ -79,8 +80,10 @@ class ControllerReader:
         """Read every block of the plan. Never raises on controller/network errors.
 
         A Modbus exception response (e.g. illegal address on a model without that block)
-        only fails that block. A connection-level failure aborts the poll, so a dead
-        controller costs one timeout per scrape, not one per block.
+        only fails that block. A lost response (the D-509 MK3 drops ~1 of 25 requests now and
+        then) is retried once after a reconnect, which also resynchronises transaction ids;
+        only when that retry fails too, or reconnecting fails, the poll is aborted, so a dead
+        controller costs at most two timeouts per scrape, not one per block.
         """
         snap = Snapshot(timestamp=time.time())
         t0 = time.monotonic()
@@ -102,16 +105,33 @@ class ControllerReader:
             try:
                 regs = self.read_block(start, count)
             except (ModbusException, OSError) as e:
-                snap.failed_blocks.append((start, count, str(e)))
-                if not self.client.connected or _is_connection_error(e):
-                    self.client.close()
+                if self.client.connected and not _is_connection_error(e):
+                    snap.failed_blocks.append((start, count, str(e)))  # e.g. illegal address
+                    continue
+                regs = self._retry_after_reconnect(snap, start, count)
+                if regs is None:
+                    snap.failed_blocks.append((start, count, str(e)))
                     snap.connected = False
                     snap.failed_blocks.extend((s, c, "aborted") for s, c in blocks[i + 1:])
                     break
-                continue
             snap.words.update({start + j: v for j, v in enumerate(regs)})
         snap.duration = time.monotonic() - t0
         return snap
+
+
+    def _retry_after_reconnect(self, snap: Snapshot, start: int, count: int) -> list[int] | None:
+        self.client.close()
+        try:
+            if not self._ensure_connected():
+                return None
+            snap.requests += 1
+            regs = self.read_block(start, count)
+        except (ModbusException, OSError) as e:
+            log.debug("retry of %d+%d failed: %s", start, count, e)
+            self.client.close()
+            return None
+        snap.retried += 1
+        return regs
 
 
 def _is_connection_error(e: Exception) -> bool:

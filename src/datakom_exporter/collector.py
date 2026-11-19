@@ -23,6 +23,7 @@ from prometheus_client.registry import Collector
 from .modbus import ControllerReader, Snapshot
 from .registers import (
     ALARM_BLOCKS,
+    ALARM_NAMES,
     ALARM_WORDS,
     DEFAULT_GROUP_INTERVALS,
     FLAG_ALARM_SUMMARY,
@@ -50,7 +51,7 @@ def decode_snapshot(words: dict[int, int], word_order: str) -> dict[Key, int]:
     """Raw (undivided) integer value for every register present in ``words``."""
     out: dict[Key, int] = {}
     for r in REGISTERS:
-        v = decode(words, r.address, r.words, r.signed, word_order)
+        v = decode(words, r.address, r.words, r.signed, word_order, r.na)
         if v is not None:
             out[r.key] = v
     return out
@@ -77,6 +78,7 @@ class DatakomCollector(Collector):
         self.polls_total = 0
         self.requests_total = 0
         self.request_errors_total = 0
+        self.request_retries_total = 0
 
     # -- polling ---------------------------------------------------------------------------------
     def due_groups(self, now: float) -> list[str]:
@@ -136,6 +138,7 @@ class DatakomCollector(Collector):
             return Snapshot(connected=True, timestamp=time.time())
         snap = self.reader.poll(read_plan(groups))
         self.requests_total += snap.requests
+        self.request_retries_total += snap.retried
         self.request_errors_total += sum(
             1 for *_, why in snap.failed_blocks if why not in ("not connected", "aborted"))
         return snap
@@ -143,8 +146,9 @@ class DatakomCollector(Collector):
     @staticmethod
     def _merge(a: Snapshot, b: Snapshot) -> Snapshot:
         return Snapshot(words={**a.words, **b.words}, failed_blocks=a.failed_blocks + b.failed_blocks,
-                        requests=a.requests + b.requests, duration=a.duration + b.duration,
-                        timestamp=a.timestamp, connected=a.connected and b.connected)
+                        requests=a.requests + b.requests, retried=a.retried + b.retried,
+                        duration=a.duration + b.duration, timestamp=a.timestamp,
+                        connected=a.connected and b.connected)
 
     def _apply(self, snap: Snapshot, groups: list[str], now: float) -> None:
         if not snap.connected:
@@ -225,7 +229,7 @@ class DatakomCollector(Collector):
             yield info
 
         active = GaugeMetricFamily("genset_alarm_active", "Active alarm bit (500-MODBUS alarm table)",
-                                   labels=["class", "bit"])
+                                   labels=["class", "bit", "name"])
         count = GaugeMetricFamily("genset_alarms", "Number of active alarms per class",
                                   labels=["class"])
         for cls, start in ALARM_BLOCKS.items():
@@ -235,7 +239,7 @@ class DatakomCollector(Collector):
             bits = alarm_bits(regs)  # type: ignore[arg-type]
             count.add_metric([cls], len(bits))
             for b in bits:
-                active.add_metric([cls, str(b)], 1)
+                active.add_metric([cls, str(b), ALARM_NAMES.get(b, f"Reserved {b}")], 1)
         if "alarms" in self.groups:
             yield count
             yield active
@@ -270,3 +274,6 @@ class DatakomCollector(Collector):
                                   value=self.requests_total)
         yield CounterMetricFamily("genset_modbus_request_errors",
                                   "Modbus read requests that failed", value=self.request_errors_total)
+        yield CounterMetricFamily("genset_modbus_request_retries",
+                                  "Lost responses recovered by reconnecting and retrying",
+                                  value=self.request_retries_total)

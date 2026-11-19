@@ -78,7 +78,7 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 | `DATAKOM_UNIT_ID` | 1 | Modbus address контролера |
 | `DATAKOM_WORD_ORDER` | `low_first` | порядок слів 32-бітних значень (D-300 MK3: `low_first`) |
 | `DATAKOM_TIMEOUT` | 2 | таймаут запиту, с |
-| `DATAKOM_RETRIES` | 1 | повтори pymodbus на запит |
+| `DATAKOM_RETRIES` | 1 | повтори pymodbus на тому самому з'єднанні; якщо й вони без відповіді — ще один повтор після перепідключення |
 | `DATAKOM_REQUEST_DELAY` | 0 | пауза між блоками, с (якщо контролер не встигає) |
 | `DATAKOM_LISTEN` | `:9725` | адреса HTTP |
 | `DATAKOM_MIN_POLL_INTERVAL` | 5 | скрейпи в межах цього часу беруть попереднє опитування |
@@ -199,10 +199,11 @@ scrape_configs:
 | `genset_active_energy_kilowatthours_total`, `genset_reactive_energy_kilovarhours_total{kind}` | 10628–10633 | |
 | `genset_service_hours_since`, `genset_service_days_since` | 10624, 10626 | |
 | `genset_service_hours_to{service}`, `genset_service_days_to{service}` | 10634–10645 | від'ємні — сервіс прострочено |
-| `genset_alarms{class}`, `genset_alarm_active{class,bit}` | 10504–10551 | `class`: shutdown / loaddump / warning |
+| `genset_alarms{class}`, `genset_alarm_active{class,bit,name}` | 10504–10551 | `class`: shutdown / loaddump / warning; `name` — з 500-MODBUS, напр. `Low Fuel Level` |
 | `genset_modbus_up`, `genset_modbus_failed_blocks`, `genset_modbus_poll_duration_seconds`, `genset_modbus_poll_timestamp_seconds` | | стан останнього опитування |
 | `genset_modbus_group_last_read_timestamp_seconds{group}` | | останнє успішне читання групи |
 | `genset_modbus_polls_total`, `genset_modbus_requests_total`, `genset_modbus_request_errors_total` | | |
+| `genset_modbus_request_retries_total` | | загублені відповіді, відновлені перепідключенням і повтором |
 
 ### Дашборда "Generator"
 
@@ -268,9 +269,14 @@ ruff check src tests
 ```sh
 DATAKOM_LIVE_HOST=<ip> pytest -m live -v -s
 # коли ID і порядок слів відомі:
-DATAKOM_LIVE_HOST=<ip> DATAKOM_LIVE_IDENTITY=0x.... DATAKOM_LIVE_WORD_ORDER=low_first pytest -m live -v
-datakom-exporter dump --host <ip> --name "D-509 MK3, stopped" --out tests/fixtures/recorded/d509mk3_stopped.json
+DATAKOM_LIVE_HOST=<ip> DATAKOM_LIVE_IDENTITY=0xd512 DATAKOM_LIVE_WORD_ORDER=low_first pytest -m live -v
+datakom-exporter dump --host <ip> --name "D-509 MK3, mains present, AUTO" --out tests/fixtures/recorded/d509mk3_auto.json
 ```
+
+Перше тестування на D-509 MK3 (2026-11-19): ID `0xD512`, порядок слів `low_first`, усі блоки
+читаються, 8/8 live-тестів, скрейп ≈0.83 с (≈120 мс на запит). Деталі — у
+[docs/GENERATOR_MODBUS_CONTEXT.md](docs/GENERATOR_MODBUS_CONTEXT.md). Значення `0x7FFF` аналогових
+датчиків (датчик не встановлений) не експортуються.
 
 Live-тести (лише читання) перевіряють: ID у 10609, що кожен блок плану читання доступний
 (немає «illegal address»), таблиці аварій, порядок слів, правдоподібність значень,

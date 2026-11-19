@@ -243,7 +243,7 @@ def test_alarm_flag_triggers_immediate_table_read():
     reader.requests.clear()
     got = scrape(col)
     assert len(alarm_requests(reader.requests)) == 3
-    assert got['genset_alarm_active{bit="17",class="warning"}'] == 1
+    assert got['genset_alarm_active{bit="17",class="warning",name="Extension input 10"}'] == 1
     assert got['genset_alarms{class="warning"}'] == 1
 
     # same summary, interval not due: tables are not read again
@@ -267,7 +267,7 @@ def test_alarm_flag_triggers_immediate_table_read():
     got = scrape(col)
     assert alarm_requests(reader.requests) == []
     assert got['genset_alarms{class="warning"}'] == 0
-    assert 'genset_alarm_active{bit="17",class="warning"}' not in got
+    assert 'genset_alarm_active{bit="17",class="warning",name="Extension input 10"}' not in got
 
 
 def test_without_flags_group_alarm_tables_follow_interval(make_controller, make_collector):

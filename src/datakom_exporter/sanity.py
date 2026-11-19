@@ -32,9 +32,14 @@ RULES = {
     "genset_fuel_level_percent": (lambda v: _in(v, 0, 100), "0..100 %"),
     "genset_coolant_temperature_celsius": (lambda v: _in(v, -40, 200), "-40..200 C"),
     "genset_oil_pressure_bar": (lambda v: _in(v, -1, 20), "-1..20 bar"),
+    "genset_oil_temperature_celsius": (lambda v: _in(v, -40, 200), "-40..200 C"),
     "genset_mode": (lambda v: v in KNOWN_MODES, "one of 1,2,4,8"),
     "genset_operation_status": (lambda v: v in KNOWN_STATUSES, "0..31"),
-    "genset_engine_hours_total": (lambda v: _in(v, 0, 200000), "0..200000 h"),
+    # counters: a swapped 32-bit word order turns small values into huge ones
+    "genset_engine_hours_total": (lambda v: _in(v, 0, 100000), "0..100000 h"),
+    "genset_runs_total": (lambda v: _in(v, 0, 100000), "0..100000"),
+    "genset_cranks_total": (lambda v: _in(v, 0, 100000), "0..100000"),
+    "genset_on_load_total": (lambda v: _in(v, 0, 100000), "0..100000"),
 }
 
 

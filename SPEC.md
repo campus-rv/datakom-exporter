@@ -52,7 +52,9 @@ Prometheus-експортер для контролерів генераторн
   `genset_modbus_poll_duration_seconds`, `genset_modbus_poll_timestamp_seconds`,
   `genset_modbus_group_last_read_timestamp_seconds{group}`, лічильники опитувань/запитів/помилок.
 - E4. `genset_controller_info{model,device_identity,hw_version,sw_version,word_order}`.
-- E5. Аварії: `genset_alarms{class}` (кількість), `genset_alarm_active{class,bit}` (біт 0 = LSB першого регістра).
+- E5. Аварії: `genset_alarms{class}` (кількість), `genset_alarm_active{class,bit,name}` (біт 0 = LSB
+  першого регістра, назва — з «List of alarm bits» 500-MODBUS).
+- E8. Значення аналогових датчиків `0x7FFF` («датчик не встановлений») не експортуються.
 - E7. Прапорці функцій: `genset_flag{flag}` 0/1 для 112 названих бітів (500-MODBUS, «List of
   function flags»); `genset_operation_timer_seconds` (10606).
 - E6. Старі метрики `gen_*` не експортуються.
@@ -96,6 +98,7 @@ Prometheus-експортер для контролерів генераторн
 - Розшифровка назв окремих бітів аварій (немає таблиці для D-509).
 
 ## Відкриті питання
-- ID D-509 MK3 у регістрі 10609 і порядок слів — визначити `probe` на залізі.
-- Знак PF на ємнісному навантаженні; адреси L-L і помфазної потужності — звірити з дисплеєм.
-- Чи має D-509 усі блоки карти 500-MODBUS (live-тест `test_every_block_of_the_read_plan_is_readable`).
+- ~~ID D-509 MK3 і порядок слів~~ — `0xD512`, `low_first` (перевірено 2026-11-19).
+- ~~Чи має D-509 усі блоки карти 500-MODBUS~~ — так, усі 15 блоків читаються.
+- Значення під напругою мережі і під навантаженням: прапорці AMF, контактори, частота, знак PF —
+  перевірити, коли мережу подадуть і генератор відпрацює аварію мережі.

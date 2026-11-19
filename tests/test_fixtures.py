@@ -28,6 +28,8 @@ def test_fixture_scrape_matches_expected(fixture, make_controller, make_collecto
     for key, want in fixture.get("expected", {}).items():
         assert key in got, f"missing {key}"
         assert got[key] == pytest.approx(want), key
+    for name in fixture.get("expected_absent", []):
+        assert not any(k == name or k.startswith(name + "{") for k in got), f"{name} exported"
 
 
 def test_fixture_values_are_plausible(fixture):

@@ -79,15 +79,15 @@
   "genset_alarms{class=\"shutdown\"}": 1,
   "genset_alarms{class=\"loaddump\"}": 0,
   "genset_alarms{class=\"warning\"}": 2,
-  "genset_alarm_active{bit=\"3\",class=\"shutdown\"}": 1,
-  "genset_alarm_active{bit=\"0\",class=\"warning\"}": 1,
-  "genset_alarm_active{bit=\"31\",class=\"warning\"}": 1,
   "genset_flag{flag=\"genset_contactor\"}": 1,
   "genset_flag{flag=\"mains_contactor\"}": 0,
   "genset_flag{flag=\"mains_fail\"}": 1,
   "genset_flag{flag=\"shutdown_alarm\"}": 1,
   "genset_flag{flag=\"any_alarm\"}": 1,
-  "genset_flag{flag=\"auto_ready\"}": 0
+  "genset_flag{flag=\"auto_ready\"}": 0,
+  "genset_alarm_active{bit=\"3\",class=\"shutdown\",name=\"Digital input 4\"}": 1,
+  "genset_alarm_active{bit=\"0\",class=\"warning\",name=\"Digital input 1\"}": 1,
+  "genset_alarm_active{bit=\"31\",class=\"warning\",name=\"Extension input 24\"}": 1
  },
  "flags": [
   "genset_contactor",
