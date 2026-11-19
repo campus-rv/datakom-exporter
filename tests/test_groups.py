@@ -353,3 +353,39 @@ def test_dashboard_query_has_data_with_default_groups(name, matchers, make_contr
                for s in fam.samples]
     assert any(s.name in (name, name + "_total") and _matches(s.labels, matchers)
                for s in samples), f"no sample for {name}{matchers}"
+
+
+# --- value names on the dashboard panels follow the register map --------------------------------
+def _dashboard():
+    return json.loads(DASHBOARD_FILE.read_text(encoding="utf-8"))
+
+
+def _panel(d, title, kind):
+    found = [p for p in d["panels"] if p["title"] == title and p["type"] == kind]
+    assert len(found) == 1, (title, kind)
+    return found[0]
+
+
+def _value_texts(panel):
+    out = {}
+    for m in panel["fieldConfig"]["defaults"]["mappings"]:
+        if m["type"] == "value":
+            out.update({int(k): v["text"] for k, v in m["options"].items()})
+    return out
+
+
+def test_dashboard_status_and_mode_names_follow_register_map():
+    from datakom_exporter.registers import MODES, OPERATION_STATUS
+
+    d = _dashboard()
+    for title, kind in (("Status", "stat"), ("Operation status", "state-timeline")):
+        texts = _value_texts(_panel(d, title, kind))
+        assert set(texts) == set(OPERATION_STATUS), title
+        assert all(texts[k].lower() == v.lower() for k, v in OPERATION_STATUS.items()), title
+    assert _value_texts(_panel(d, "Mode", "stat")) == MODES
+
+
+def test_dashboard_panel_ids_unique():
+    d = _dashboard()
+    ids = [p["id"] for p in d["panels"]] + [q["id"] for p in d["panels"] for q in p.get("panels", [])]
+    assert len(ids) == len(set(ids))

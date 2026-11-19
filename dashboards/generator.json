@@ -249,29 +249,29 @@
           },
           "mappings": [
             {
+              "type": "value",
               "options": {
                 "1": {
+                  "text": "STOP",
                   "color": "red",
-                  "index": 0,
-                  "text": "STOP"
+                  "index": 0
                 },
                 "2": {
-                  "color": "green",
-                  "index": 3,
-                  "text": "RUN"
+                  "text": "MANUAL",
+                  "color": "orange",
+                  "index": 1
                 },
                 "4": {
+                  "text": "AUTO",
                   "color": "green",
-                  "index": 1,
-                  "text": "AUTO"
+                  "index": 2
                 },
                 "8": {
+                  "text": "TEST",
                   "color": "yellow",
-                  "index": 2,
-                  "text": "TEST"
+                  "index": 3
                 }
-              },
-              "type": "value"
+              }
             }
           ],
           "thresholds": {
@@ -415,58 +415,19 @@
       ]
     },
     {
+      "type": "table",
+      "title": "Alarms",
+      "id": 5,
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS_ID}"
       },
-      "type": "stat",
-      "title": "Alarms",
-      "id": 5,
+      "description": "Active bits of the shutdown / loaddump / warning tables with their 500-MODBUS names. Empty when no alarm is active.",
       "gridPos": {
         "h": 6,
         "w": 7,
         "x": 9,
         "y": 1
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
       },
       "targets": [
         {
@@ -475,34 +436,134 @@
             "uid": "${DS_PROMETHEUS_ID}"
           },
           "editorMode": "code",
-          "expr": "genset_alarms{instance=\"$instance\",class=\"shutdown\"}",
-          "legendFormat": "Shutdown",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_alarms{instance=\"$instance\",class=\"loaddump\"}",
-          "legendFormat": "Load dump",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_alarms{instance=\"$instance\",class=\"warning\"}",
-          "legendFormat": "Warning",
-          "range": true,
-          "refId": "C"
+          "expr": "genset_alarm_active{instance=\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "legendFormat": "__auto"
         }
-      ]
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true
+            },
+            "indexByName": {
+              "class": 0,
+              "bit": 1,
+              "name": 2
+            },
+            "renameByName": {
+              "class": "Class",
+              "bit": "Bit",
+              "name": "Alarm"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "No active alarms"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Class"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "shutdown": {
+                        "text": "SHUTDOWN",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "loaddump": {
+                        "text": "LOAD DUMP",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "warning": {
+                        "text": "WARNING",
+                        "color": "yellow",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bit"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "Class",
+            "desc": false
+          }
+        ]
+      }
     },
     {
       "datasource": {
@@ -1712,35 +1773,41 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS_ID}"
       },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              }
-            ]
-          },
-          "unit": "kwatt"
-        },
-        "overrides": []
-      },
+      "type": "stat",
+      "title": "Genset power",
+      "id": 22,
       "gridPos": {
         "h": 8,
         "w": 6,
         "x": 12,
         "y": 17
       },
-      "id": 22,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "unit": "kwatt",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
       "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -1748,11 +1815,10 @@
           "fields": "",
           "values": false
         },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
       },
-      "pluginVersion": "11.6.1",
       "targets": [
         {
           "datasource": {
@@ -1760,36 +1826,13 @@
             "uid": "${DS_PROMETHEUS_ID}"
           },
           "editorMode": "code",
-          "expr": "genset_active_power_kilowatts{instance=\"$instance\",source=\"genset\",phase=\"L1\"}",
-          "legendFormat": "Phase 1",
           "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_active_power_kilowatts{instance=\"$instance\",source=\"genset\",phase=\"L2\"}",
-          "legendFormat": "Phase 2",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_active_power_kilowatts{instance=\"$instance\",source=\"genset\",phase=\"L3\"}",
-          "legendFormat": "Phase 3",
-          "range": true,
-          "refId": "C"
+          "refId": "A",
+          "legendFormat": "Total",
+          "expr": "genset_active_power_kilowatts{instance=\"$instance\",source=\"genset\",phase=\"total\"}"
         }
       ],
-      "title": "Genset power",
-      "type": "gauge"
+      "description": "Total active power of the genset (controller register 10294, sum of L1-L3)."
     },
     {
       "datasource": {
@@ -2412,20 +2455,20 @@
                 "value": "rotrpm"
               },
               {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "custom.axisLabel",
-                "value": "rpm"
-              },
-              {
                 "id": "custom.axisSoftMin",
                 "value": 0
               },
               {
                 "id": "custom.axisSoftMax",
                 "value": 1800
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "rpm"
               }
             ]
           },
@@ -2440,20 +2483,20 @@
                 "value": "celsius"
               },
               {
-                "id": "custom.axisPlacement",
-                "value": "left"
-              },
-              {
-                "id": "custom.axisLabel",
-                "value": "°C"
-              },
-              {
                 "id": "custom.axisSoftMin",
                 "value": 0
               },
               {
                 "id": "custom.axisSoftMax",
                 "value": 100
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "°C"
               }
             ]
           },
@@ -2468,20 +2511,20 @@
                 "value": "celsius"
               },
               {
-                "id": "custom.axisPlacement",
-                "value": "left"
-              },
-              {
-                "id": "custom.axisLabel",
-                "value": "°C"
-              },
-              {
                 "id": "custom.axisSoftMin",
                 "value": 0
               },
               {
                 "id": "custom.axisSoftMax",
                 "value": 100
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "°C"
               }
             ]
           },
@@ -2496,20 +2539,16 @@
                 "value": "pressurebar"
               },
               {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "custom.axisLabel",
-                "value": "bar"
-              },
-              {
                 "id": "custom.axisSoftMin",
                 "value": 0
               },
               {
                 "id": "custom.axisSoftMax",
                 "value": 8
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "hidden"
               }
             ]
           },
@@ -2524,20 +2563,16 @@
                 "value": "percent"
               },
               {
-                "id": "custom.axisPlacement",
-                "value": "left"
-              },
-              {
-                "id": "custom.axisLabel",
-                "value": "%"
-              },
-              {
                 "id": "custom.axisSoftMin",
                 "value": 0
               },
               {
                 "id": "custom.axisSoftMax",
                 "value": 100
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "hidden"
               }
             ]
           }
@@ -2971,107 +3006,6 @@
           },
           "mappings": [
             {
-              "options": {
-                "1": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "STOP"
-                },
-                "2": {
-                  "color": "green",
-                  "index": 3,
-                  "text": "RUN"
-                },
-                "4": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "AUTO"
-                },
-                "8": {
-                  "color": "yellow",
-                  "index": 2,
-                  "text": "TEST"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 24,
-        "x": 0,
-        "y": 53
-      },
-      "id": 35,
-      "options": {
-        "alignValue": "left",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "mergeValues": false,
-        "rowHeight": 0.9,
-        "showValue": "auto",
-        "tooltip": {
-          "hideZeros": false,
-          "maxHeight": 600,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.6.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_mode{instance=\"$instance\"}",
-          "legendFormat": "Mode",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Mode",
-      "type": "state-timeline"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS_ID}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "axisPlacement": "auto",
-            "fillOpacity": 70,
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineWidth": 0,
-            "spanNulls": false
-          },
-          "mappings": [
-            {
               "type": "value",
               "options": {
                 "0": {
@@ -3131,9 +3065,9 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 53
       },
-      "id": 36,
+      "id": 35,
       "options": {
         "alignValue": "left",
         "legend": {
@@ -3251,6 +3185,6 @@
   "timezone": "",
   "title": "Generator (datakom-exporter)",
   "uid": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
-  "version": 9,
+  "version": 16,
   "description": "Datakom genset controller via datakom-exporter (genset_* metrics)"
 }

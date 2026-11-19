@@ -150,8 +150,10 @@ OPERATION_STATUS: dict[int, str] = {
 }
 _reg("live", "genset_operation_status", 10604, 1, False, 1,
      "Unit operation status code: " + ", ".join(f"{k}={v}" for k, v in OPERATION_STATUS.items()))
+# 2 = MANUAL on D-700 / D-509 (flag manual_mode), RUN on D-500
+MODES: dict[int, str] = {1: "STOP", 2: "MANUAL", 4: "AUTO", 8: "TEST"}
 _reg("live", "genset_mode", 10605, 1, False, 1,
-     "Unit mode (1=STOP 2=RUN/MANUAL 4=AUTO 8=TEST)")
+     "Unit mode (" + " ".join(f"{k}={v}" for k, v in MODES.items()) + ")")
 _reg("live", "genset_operation_timer_seconds", 10606, 1, False, 1,
      "Remaining time of the current wait state (e.g. mains fail delay, cooling)")
 
