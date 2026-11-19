@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+# recorded live snapshots go to tests/fixtures/ explicitly; scratch dumps stay out
+*.dump.json
