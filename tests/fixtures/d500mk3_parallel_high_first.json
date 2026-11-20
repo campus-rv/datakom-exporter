@@ -69,7 +69,7 @@
   "genset_active_power_kilowatts{phase=\"total\",source=\"genset\"}": -12.3,
   "genset_reactive_power_kilovars{phase=\"total\",source=\"genset\"}": 5.7,
   "genset_apparent_power_kilovoltamperes{phase=\"total\",source=\"genset\"}": 135.4,
-  "genset_power_factor{source=\"genset\"}": -0.85,
+  "genset_power_factor{phase=\"total\",source=\"genset\"}": -0.85,
   "genset_frequency_hertz{source=\"mains\"}": 50.0,
   "genset_battery_volts": 27.1,
   "genset_operation_status": 13,

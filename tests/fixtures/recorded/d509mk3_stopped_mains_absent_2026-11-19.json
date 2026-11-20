@@ -255,7 +255,7 @@
   "genset_engine_rpm": 0,
   "genset_voltage_ln_volts{phase=\"L1\",source=\"mains\"}": 0,
   "genset_voltage_ln_volts{phase=\"L1\",source=\"genset\"}": 0,
-  "genset_power_factor{source=\"genset\"}": 1.0,
+  "genset_power_factor{phase=\"total\",source=\"genset\"}": 1.0,
   "genset_engine_hours_total": 2.85,
   "genset_runs_total": 5,
   "genset_cranks_total": 8,

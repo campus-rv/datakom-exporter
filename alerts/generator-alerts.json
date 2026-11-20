@@ -254,8 +254,8 @@
           "isPaused": false
         },
         {
-          "uid": "datakom-controller-alarm",
-          "title": "Controller alarm",
+          "uid": "datakom-controller-shutdown",
+          "title": "Controller shutdown / loaddump alarm",
           "condition": "C",
           "data": [
             {
@@ -267,7 +267,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "genset_alarm_active",
+                "expr": "genset_alarm_active{class=~\"shutdown|loaddump\"}",
                 "instant": true,
                 "range": false,
                 "editorMode": "code",
@@ -331,9 +331,91 @@
           },
           "labels": {
             "group": "power",
-            "severity": "{{ if eq $labels.class \"warning\" }}warning{{ else }}critical{{ end }}"
+            "severity": "critical"
           },
-          "isPaused": true
+          "isPaused": false
+        },
+        {
+          "uid": "datakom-controller-warning",
+          "title": "Controller warning",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "genset_alarm_active{class=\"warning\"}",
+                "instant": true,
+                "range": false,
+                "editorMode": "code",
+                "legendFormat": "__auto"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    }
+                  }
+                ],
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                }
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "annotations": {
+            "summary": "Controller warning: {{ $labels.name }}",
+            "description": "Datakom warning alarm bit {{ $labels.bit }}: {{ $labels.name }}.",
+            "__dashboardUid__": "21ec9aa7-edb0-4f77-87be-d054eb9f0b39",
+            "__panelId__": "5"
+          },
+          "labels": {
+            "group": "power",
+            "severity": "warning"
+          },
+          "isPaused": false
         },
         {
           "uid": "datakom-not-in-auto",

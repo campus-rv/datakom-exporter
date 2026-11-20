@@ -27,6 +27,7 @@ RULES = {
     "genset_frequency_hertz": (lambda v: v == 0 or _in(v, 30, 70), "0 or 30..70 Hz"),
     "genset_power_factor": (lambda v: _in(v, -1, 1), "-1..1"),
     "genset_battery_volts": (lambda v: _in(v, 5, 36), "5..36 V (8-36 VDC supply)"),
+    "genset_battery_crank_min_volts": (lambda v: _in(v, 0, 36), "0..36 V"),
     "genset_charge_input_volts": (lambda v: _in(v, 0, 40), "0..40 V"),
     "genset_engine_rpm": (lambda v: _in(v, 0, 4000), "0..4000 rpm"),
     "genset_fuel_level_percent": (lambda v: _in(v, 0, 100), "0..100 %"),

@@ -2241,7 +2241,7 @@
         "uid": "${DS_PROMETHEUS_ID}"
       },
       "type": "gauge",
-      "title": "Oil temperature",
+      "title": "Last crank voltage",
       "id": 29,
       "gridPos": {
         "h": 4,
@@ -2259,26 +2259,23 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "red",
                 "value": null
               },
               {
-                "color": "green",
-                "value": 40
-              },
-              {
                 "color": "orange",
-                "value": 110
+                "value": 9.6
               },
               {
-                "color": "red",
-                "value": 125
+                "color": "green",
+                "value": 10.5
               }
             ]
           },
-          "unit": "celsius",
-          "min": 0,
-          "max": 150
+          "unit": "volt",
+          "min": 8,
+          "max": 15,
+          "decimals": 2
         },
         "overrides": []
       },
@@ -2304,12 +2301,13 @@
             "uid": "${DS_PROMETHEUS_ID}"
           },
           "editorMode": "code",
-          "expr": "genset_oil_temperature_celsius{instance=\"$instance\"}",
-          "legendFormat": "°C",
+          "expr": "genset_battery_crank_min_volts{instance=\"$instance\"}",
+          "legendFormat": "V",
           "range": true,
           "refId": "A"
         }
-      ]
+      ],
+      "description": "Minimum battery voltage measured by the controller during the last cranking (500-MODBUS 10385, read every 5 min)."
     },
     {
       "datasource": {
@@ -2501,34 +2499,6 @@
           {
             "matcher": {
               "id": "byFrameRefID",
-              "options": "C"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "celsius"
-              },
-              {
-                "id": "custom.axisSoftMin",
-                "value": 0
-              },
-              {
-                "id": "custom.axisSoftMax",
-                "value": 100
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "left"
-              },
-              {
-                "id": "custom.axisLabel",
-                "value": "°C"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byFrameRefID",
               "options": "D"
             },
             "properties": [
@@ -2624,17 +2594,6 @@
           "legendFormat": "Coolant, °C",
           "range": true,
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS_ID}"
-          },
-          "editorMode": "code",
-          "expr": "genset_oil_temperature_celsius{instance=\"$instance\"}",
-          "legendFormat": "Oil temperature, °C",
-          "range": true,
-          "refId": "C"
         },
         {
           "datasource": {

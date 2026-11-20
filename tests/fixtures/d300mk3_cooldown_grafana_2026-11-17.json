@@ -33,7 +33,7 @@
   "genset_voltage_ln_volts{phase=\"L3\",source=\"genset\"}": 232.5,
   "genset_current_amperes{phase=\"L1\",source=\"genset\"}": 0,
   "genset_active_power_kilowatts{phase=\"total\",source=\"genset\"}": 0,
-  "genset_power_factor{source=\"genset\"}": 1.0,
+  "genset_power_factor{phase=\"total\",source=\"genset\"}": 1.0,
   "genset_frequency_hertz{source=\"genset\"}": 53.36,
   "genset_battery_volts": 14.42,
   "genset_oil_pressure_bar": 7.6,

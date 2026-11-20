@@ -94,16 +94,20 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 
 | Група | Інтервал за замовч. | Запитів | Що |
 |---|---|---|---|
-| `live` | 0 (кожен скрейп) | 6 | генератор: U, I, kW по фазах і загальна, kVA, PF, Hz; батарея, зарядний вхід, тиск масла, температура ОР і масла, паливо, rpm, статус, режим, таймер стану |
+| `live` | 0 (кожен скрейп) | 6 | генератор: U, I, kW по фазах і загальна, kVA, PF по фазах і загальний, Hz; батарея, зарядний вхід, тиск масла, температура ОР і масла, паливо, rpm, стан цифрових входів (сирий), статус, режим, таймер стану |
 | `mains` | 0 (кожен скрейп) | +0 | мережа: U і Hz (у тих самих блоках, що й `live`) |
 | `flags` | 0 (кожен скрейп) | +1 | прапорці функцій: аварія мережі, контактори, auto ready, двигун працює, зведені аварії, запити на сервіс… |
 | `alarms` | 60 с | 0 / 3 | таблиці аварій shutdown / loaddump / warning — лише поки прапорець «є аварія» = 1 (див. нижче) |
-| `counters` | 300 с | 2 | мотогодини, запуски, прокрутки, on-load, kWh, години до сервісу |
+| `counters` | 300 с | 3 | мотогодини, запуски, прокрутки, on-load, kWh, години до сервісу, мінімум батареї під час останньої прокрутки |
 | `info` | 3600 с | 1 | ID контролера, версії HW/SW |
-| `extended` | вимкнено | 6 | лінійні напруги, реактивна потужність, kVArh, години/дні від сервісу, дні до сервісу; струм/потужність/PF/kVA/kWh мережі (нулі при CT на генераторі) |
+| `extended` | вимкнено | 6 | лінійні напруги, реактивна потужність, kVArh, години/дні від сервісу, дні до сервісу; струм/потужність/PF (загальний і по фазах)/kVA/kWh мережі (нулі при CT на генераторі) |
 
 > **Оновлення з 0.1.x.** Струм, потужність, PF і kVA мережі (`source="mains"`) перенесено з
 > групи `mains` у `extended`. Щоб і далі їх отримувати, додайте `extended=<с>` до `DATAKOM_GROUPS`.
+>
+> **Оновлення з 0.2.x.** `genset_power_factor` отримав мітку `phase` (`L1`–`L3`, `total`): запити
+> на загальний PF — `genset_power_factor{phase="total"}`. Додано `genset_digital_inputs_raw` і
+> `genset_battery_crank_min_volts` (+1 запит раз на 5 хв).
 
 Приклад: `DATAKOM_GROUPS=live=0,mains=0,flags=0,alarms=60,counters=300,info=3600,extended=600`. Група, якої
 немає в списку (або `=off`), ніколи не читається і не експортується. Значення повільних груп
@@ -112,21 +116,22 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 `genset_modbus_group_last_read_timestamp_seconds{group}` показує час останнього читання групи.
 
 **Таблиці аварій за прапорцями.** Коли увімкнена група `flags`, три таблиці аварій (3 запити)
-читаються лише тоді, коли прапорець `any_alarm` = 1, і тоді — на кожному опитуванні (друга
-аварія того самого класу не змінює зведених прапорців, тож інакше її було б видно лише за
-інтервал `alarms`). Без активної аварії таблиці відомі як
-нульові і не читаються. Без групи `flags` таблиці читаються просто за інтервалом.
+читаються лише тоді, коли прапорець `any_alarm` = 1: раз на інтервал `alarms` (60 с), навіть
+якщо аварія висить довго, і одразу, коли змінюються зведені прапорці (аварія з'явилась,
+зникла чи змінила клас). Друга аварія того самого класу зведених прапорців не змінює, тож її
+видно з затримкою до 60 с. Без активної аварії таблиці відомі як нульові і не читаються. Без групи `flags` таблиці читаються просто за інтервалом.
 
 **Навантаження** (симуляція реальним кодом, скрейп кожні 30 с):
 
 | Скрейп | Без аварій | З активною аварією |
 |---|---|---|
-| звичайний | 7 | 10 (+3 таблиці) |
-| щохвилини | 7 | 10 |
-| раз на 5 хв | 9 (+2 лічильники) | 12 |
-| у середньому за хвилину | 14.4 | 20.4 |
+| звичайний | 7 | 7 |
+| щохвилини | 7 | 10 (+3 таблиці) |
+| раз на 5 хв | 10 (+3 лічильники) | 13 |
+| за 5 хвилин | 73 | 88 |
+| у середньому за хвилину | 14.6 | 17.6 |
 
-При скрейпі раз на 60 с — 7.4 запиту за хвилину без аварій. Недоступний контролер коштує
+При скрейпі раз на 60 с — 7.6 запиту за хвилину без аварій і 10.6 з активною аварією. Недоступний контролер коштує
 один таймаут підключення, а не таймаут на кожен блок. У LAN опитування триває ≈0.1 с.
 
 ## Prometheus
@@ -154,7 +159,8 @@ C — поріг або math-вираз Grafana. Опис посилається
 | `datakom-mains-fail` | `genset_flag{flag="mains_fail"}` = 1 | 1m | critical |
 | `datakom-engine-running` | `genset_flag{flag="engine_running"}` = 1 | 0 | warning |
 | `datakom-genset-on-load` | `genset_flag{flag="genset_contactor"}` = 1 | 0 | warning |
-| `datakom-controller-alarm` | `genset_alarm_active` = 1, окремий алерт на кожну аварію з її назвою — **призупинене за замовчуванням** | 0 | warning для `class="warning"`, інакше critical |
+| `datakom-controller-shutdown` | `genset_alarm_active{class=~"shutdown\|loaddump"}` = 1, окремий алерт на кожну аварію з її назвою (Fail To Start, Low Oil Pressure, Over Load…) | 0 | critical |
+| `datakom-controller-warning` | `genset_alarm_active{class="warning"}` = 1, окремий алерт на кожне попередження з назвою (Low Fuel Level, Mains Phase Order Fail, Low Battery Voltage…) | 5m | warning |
 | `datakom-not-in-auto` | `genset_flag{flag="not_in_auto"}` = 1 (AMF не спрацює) | 15m | warning |
 | `datakom-battery` | батарея поза 11.9–14.8 В | 10m | warning |
 | `datakom-fuel-low` | паливо < 25 % | 10m | warning |
@@ -165,11 +171,9 @@ C — поріг або math-вираз Grafana. Опис посилається
 Поріг батареї збігається з порогом панелі дешборди. Окремого правила на напругу мережі немає:
 стан мережі визначає контролер (`datakom-mains-fail`), а саму напругу моніторять інші системи.
 
-Призупинені за замовчуванням (`"isPaused": true` у JSON, відновлюються в UI):
-- `datakom-controller-alarm` — дублює `datakom-fuel-low` (аварія контролера "Low Fuel Level",
-  біт 58). Поки воно призупинене, **аварії shutdown / loaddump та інші попередження контролера
-  в Telegram не приходять** — їх видно лише на панелі "Alarms" дешборди.
-- `datakom-service-due` — нагадування про сервіс.
+Призупинене за замовчуванням (`"isPaused": true` у JSON, відновлюється в UI) лише
+`datakom-service-due` — нагадування про сервіс. Попередження контролера "Low Fuel Level"
+(біт 58) приходить разом із `datakom-fuel-low` (поріг 25 % у Grafana).
 
 Завантаження в Grafana (створює або замінює всю групу; потрібен токен service account з правом
 на provisioning алертів):
@@ -208,12 +212,13 @@ groups:
         expr: genset_flag{flag="genset_contactor"} == 1
         labels: {group: power, severity: warning}
         annotations: {summary: "Genset is on load"}
-      - alert: GensetControllerAlarm
+      - alert: GensetControllerShutdown
         expr: genset_alarm_active{class=~"shutdown|loaddump"} == 1
         labels: {group: power, severity: critical}
         annotations: {summary: "Controller {{ $labels.class }} alarm: {{ $labels.name }}"}
       - alert: GensetControllerWarning
         expr: genset_alarm_active{class="warning"} == 1
+        for: 5m
         labels: {group: power, severity: warning}
         annotations: {summary: "Controller warning: {{ $labels.name }}"}
       - alert: GensetNotInAuto
@@ -226,7 +231,7 @@ groups:
         for: 10m
         labels: {group: power, severity: warning}
         annotations: {summary: "Battery = {{ $value }} V"}
-      - alert: GensetFuelLow          # аварія контролера "Low Fuel Level" (біт 58) дублює це правило
+      - alert: GensetFuelLow          # поруч з аварією контролера "Low Fuel Level" (біт 58)
         expr: genset_fuel_level_percent < 25
         for: 10m
         labels: {group: power, severity: warning}
@@ -262,11 +267,13 @@ groups:
 | `genset_active_power_kilowatts{source,phase}` | 10280–10295 | активна потужність (знакова) |
 | `genset_reactive_power_kilovars{source,phase}` | 10308, 10310 | |
 | `genset_apparent_power_kilovoltamperes{source,phase}` | 10324, 10326 | |
-| `genset_power_factor{source}` | 10334, 10335 | −1…1 |
+| `genset_power_factor{source,phase}` | 10328–10335 | −1…1; по фазах і `phase="total"` (до 0.3 загальний був без мітки `phase`) |
 | `genset_frequency_hertz{source}` | 10338, 10339 | |
 | `genset_battery_volts`, `genset_charge_input_volts` | 10341, 10340 | |
 | `genset_oil_pressure_bar`, `genset_coolant_temperature_celsius`, `genset_oil_temperature_celsius` | 10361, 10362, 10364 | |
 | `genset_fuel_level_percent`, `genset_engine_rpm` | 10363, 10376 | |
+| `genset_digital_inputs_raw` | 10373–10374 | сирий стан вбудованих цифрових входів, по 2 біти на вхід (коди в 500-MODBUS не описані; на D-509 невикористаний вхід = `11`) |
+| `genset_battery_crank_min_volts` | 10385 | мінімум батареї під час останньої прокрутки (група `counters`) |
 | `genset_operation_status` | 10604 | 0–25, повний список — `registers.OPERATION_STATUS` (0 at rest, 5 cranking, 8 off load, 10 transfer to genset, 13 on load, 18 transfer to mains, 22 cooling, 25 stopping…) |
 | `genset_mode` | 10605 | 1 STOP, 2 RUN/MANUAL, 4 AUTO, 8 TEST |
 | `genset_operation_timer_seconds` | 10606 | залишок поточного очікування (затримка аварії мережі, охолодження…) |
@@ -283,6 +290,26 @@ groups:
 | `genset_modbus_polls_total`, `genset_modbus_requests_total`, `genset_modbus_request_errors_total` | | |
 | `genset_modbus_request_retries_total` | | загублені відповіді, відновлені перепідключенням і повтором |
 
+### Покриття 500-MODBUS
+
+Документ 500-MODBUS (V5.6) описує **161** читабельну величину: регістр, 32-бітну пару або масив,
+як-от таблиця аварій чи буфер осцилографа, рахуються як одна. Експортер читає **75 (47 %)**,
+з груп за замовчуванням — **47 (29 %)**. Аварії і прапорці покриті повністю: 3 таблиці по 142
+названі біти, 112 прапорців. Журналу подій, J1939/DTC і годинника в документі немає.
+
+| Розділ | Задокументовано | Читається | За замовч. | Чого немає і чому |
+|---|---|---|---|---|
+| Електрика мережі й генератора, 10240–10339 | 54 | 40 (74 %) | 20 | Q/S по фазах, струм нейтралі: AMF без CT мережі, без навантаження |
+| Двигун, батарея, датчики, 10340–10503 | 51 | 9 (18 %) | 9 | батарея 2, опір і другий набір датчиків, середні, гармоніки й осцилограф: на D-509 немає або дублюють наявне |
+| Аварії, 10504–10551 | 3 | 3 (100 %) | 3 | — |
+| Статус, режим, ID, 10604–10611 | 8 | 6 (75 %) | 6 | вихід GOV/AVR %: немає регулятора |
+| Лічильники й сервіс, 10616–10645 | 15 | 15 (100 %) | 8 | kVArh, «від сервісу», дні до сервісу — у `extended` |
+| Прапорці функцій, 11555 | 1 | 1 (100 %) | 1 | — |
+| Енергія мережі, паливо, витратомір, 11569–11680 | 6 | 1 (17 %) | 0 | без CT мережі і витратоміра на D-509 нулі |
+| LED, виходи, входи розширення, батарея 2, струм заряду | 6 | 0 | 0 | розкладка LED не задокументована, розширень немає, решта 0xFFFF |
+| GPS, GPRS IP, LCD, Ethernet, MAC / UID / IMEI | 10 | 0 | 0 | немає модема; лічильники Ethernet на D-509 = 0; адреси — інфраструктура |
+| Multi-genset, 11175–11378 | 7 | 0 | 0 | одиночна установка |
+
 ### Дашборда "Generator"
 
 [dashboards/generator.json](dashboards/generator.json) — нова дешборда **"Generator
@@ -293,8 +320,8 @@ groups:
 (загальні і до сервісу 1),
 kWh, запуски / прокрутки), **Mains info** (напруга, частота, мережа OK/FAIL, контактори мережі й
 генератора, auto ready, двигун, таймер стану), **Genset info** (U, I по фазах, загальна потужність, частота,
-історія потужності), **Engine info** (rpm, тиск і температура масла, ОР, зарядний вхід,
-паливо, графік двигуна: дві осі — °C ліворуч (ОР, масло), rpm праворуч; тиск масла і паливо мають власні шкали
+історія потужності), **Engine info** (rpm, тиск масла, ОР, напруга батареї при останній прокрутці, зарядний вхід,
+паливо, графік двигуна: дві осі — °C ліворуч (ОР), rpm праворуч; тиск масла і паливо мають власні шкали
 без видимих осей, щоб зберегти місце), **Run timeline** (статус
 і стан AMF у часі: аварія мережі, контактори, двигун). Назви статусів і режимів на панелях
 — з `registers.OPERATION_STATUS` і `MODES` (тест перевіряє збіг), назви аварій — мітка `name`
@@ -314,7 +341,7 @@ kWh, запуски / прокрутки), **Mains info** (напруга, ча�
 | `gen_phaseN_current*0.1` | `genset_current_amperes{source="genset",phase="LN"}` |
 | `gen_total_active_power*0.1` | `genset_active_power_kilowatts{source="genset",phase="total"}` |
 | `gen_total_apparent_power*0.1` | `genset_apparent_power_kilovoltamperes{source="genset",phase="total"}` |
-| `gen_total_power_factor*0.1` (%) | `genset_power_factor{source="genset"}` (−1…1, одиниця `percentunit`) |
+| `gen_total_power_factor*0.1` (%) | `genset_power_factor{source="genset",phase="total"}` (−1…1, одиниця `percentunit`) |
 | `gen_frequency/100` | `genset_frequency_hertz{source="genset"}` |
 | `gen_battery_voltage/100` | `genset_battery_volts` |
 | `gen_oil_pressure/10` | `genset_oil_pressure_bar` |

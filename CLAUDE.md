@@ -43,7 +43,7 @@ DATAKOM_LIVE_HOST=<ip> .venv/bin/pytest -m live -v -s   # лише з досту
   замовчуванням (тест `test_dashboard_query_has_data_with_default_groups`).
 - Дешборда і групи змінюються разом: новий запит у `dashboards/generator.json` має отримувати
   дані з `DEFAULT_GROUP_INTERVALS`.
-- Запити дешборди — лише прості селектори `genset_*{...}` (дозволено `=` і `=~`), без
+- Запити дешборди — лише прості селектори `genset_*{...}` (дозволено `=`, `=~`, `!=`, `!~`), без
   арифметики й агрегацій: потрібне значення чи одиницю нормалізує експортер (нова метрика або
   divisor у `registers.py`), а не Grafana. Перевіряє `test_dashboard_query_is_plain_exporter_metric`.
 - Алерти — `alerts/generator-alerts.json` (Grafana-managed, завантаження `alerts/upload.py`):
@@ -57,4 +57,7 @@ DATAKOM_LIVE_HOST=<ip> .venv/bin/pytest -m live -v -s   # лише з досту
 - **Не комітити паролі, реальні IP-адреси чи імена хостів інфраструктури** — у документах
   плейсхолдери `<controller-ip>`, `<exporter-host>`; у тестах лише `127.0.0.1` / `*.example`.
   Перед комітом: `git grep -nIE '\b[0-9]{1,3}(\.[0-9]{1,3}){3}\b'` → тільки 127.0.0.1 / 0.0.0.0.
-- Нові метрики описувати в README (таблиця метрик) і SPEC.md, якщо змінюються вимоги.
+- Нові метрики описувати в README (таблиця метрик) і SPEC.md, якщо змінюються вимоги; оновлювати
+  відсоток покриття 500-MODBUS (README «Покриття 500-MODBUS», SPEC E9).
+- Shutdown / loaddump аварії контролера мають завжди мати активне правило алерту
+  (`test_shutdown_and_loaddump_alarms_are_alerted`).

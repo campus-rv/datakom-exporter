@@ -15,11 +15,12 @@ from datakom_exporter.registers import DEFAULT_GROUP_INTERVALS, FUNCTION_FLAGS
 
 ALERTS_FILE = FIXTURES.parent.parent / "alerts" / "generator-alerts.json"
 DASHBOARD_FILE = FIXTURES.parent.parent / "dashboards" / "generator.json"
-# a real D-509 dump with an active warning alarm, so genset_alarm_active is exported
-ALARM_FIXTURE = FIXTURES / "recorded" / "d509mk3_stopped_mains_absent_2026-11-19.json"
+# a real D-509 dump with an active warning alarm and a synthetic D-500 with a shutdown alarm,
+# so genset_alarm_active is exported for both rule kinds
+ALARM_FIXTURES = [FIXTURES / "recorded" / "d509mk3_stopped_mains_absent_2026-11-19.json",
+                  FIXTURES / "d500mk3_parallel_high_first.json"]
 EXPORTER_UP = 'up{job="datakom-exporter"}'
-SEVERITIES = {"critical", "warning",
-              '{{ if eq $labels.class "warning" }}warning{{ else }}critical{{ end }}'}
+SEVERITIES = {"critical", "warning"}
 
 
 def _rules():
@@ -86,18 +87,25 @@ def test_rule_links_to_existing_dashboard_panel(rule):
 @pytest.mark.parametrize("rule", [r for r in RULES if _query(r, "A")["model"]["expr"] != EXPORTER_UP],
                          ids=lambda r: r["uid"])
 def test_rule_query_has_data_with_default_groups(rule, make_controller, make_collector):
-    sim = make_controller(fixture_words(load_fixture(ALARM_FIXTURE)))
-    col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS)
-    reg = CollectorRegistry()
-    reg.register(col)
-    samples = [s for fam in text_string_to_metric_families(generate_latest(reg).decode())
-               for s in fam.samples]
+    samples = []
+    for path in ALARM_FIXTURES:
+        fx = load_fixture(path)
+        sim = make_controller(fixture_words(fx), unit_id=fx.get("unit_id", 1))
+        col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS, unit_id=fx.get("unit_id", 1),
+                             word_order=fx.get("word_order", "low_first"))
+        reg = CollectorRegistry()
+        reg.register(col)
+        samples += [s for fam in text_string_to_metric_families(generate_latest(reg).decode())
+                    for s in fam.samples]
     for name, matchers in [_selector(rule), *_helpers(rule)]:
         for key, op, value in matchers:
             if name == "genset_flag" and key == "flag":
                 assert op == "=" and value in FUNCTION_FLAGS.values(), value
-        assert any(s.name == name and _matches(s.labels, matchers) for s in samples), (
-            f"{rule['uid']}: no sample for {name}{matchers}")
+        # exclusions (!=, !~) may drop every series of a dump; they must name existing labels
+        positive = [m for m in matchers if not m[1].startswith("!")]
+        found = [s for s in samples if s.name == name and _matches(s.labels, positive)]
+        assert found, f"{rule['uid']}: no sample for {name}{matchers}"
+        assert all(key in found[0].labels for key, op, _ in matchers if op.startswith("!"))
 
 
 def test_upload_body():
@@ -117,8 +125,24 @@ def test_upload_body():
     assert [r["uid"] for r in body["rules"] if r["isPaused"]] == PAUSED_BY_DEFAULT
 
 
-# controller-alarm duplicates fuel-low (controller "Low Fuel Level", bit 58); service-due on request
-PAUSED_BY_DEFAULT = ["datakom-controller-alarm", "datakom-service-due"]
+PAUSED_BY_DEFAULT = ["datakom-service-due"]
+
+
+def test_shutdown_and_loaddump_alarms_are_alerted():
+    """Fail To Start, Low Oil Pressure, Over Load... must always reach someone."""
+    active = [r for r in RULES if not r["isPaused"]]
+    for cls in ("shutdown", "loaddump"):
+        assert any(name == "genset_alarm_active" and _matches({"class": cls}, matchers)
+                   and r["labels"]["severity"] == "critical"
+                   for r in active for name, matchers in [_selector(r)]), cls
+
+
+def test_warning_rule_covers_every_warning():
+    rule = next(r for r in RULES if r["uid"] == "datakom-controller-warning")
+    _, matchers = _selector(rule)
+    for bit in ("58", "96", "110"):                                     # incl. Low Fuel Level
+        assert _matches({"class": "warning", "bit": bit}, matchers)
+    assert not _matches({"class": "shutdown", "bit": "98"}, matchers)  # shutdown rule
 
 
 def test_only_the_exporter_health_rule_uses_a_non_exporter_metric():

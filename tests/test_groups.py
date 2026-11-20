@@ -28,7 +28,7 @@ DASHBOARD = [
     'genset_current_amperes{phase="L3",source="genset"}',
     'genset_active_power_kilowatts{phase="total",source="genset"}',
     'genset_apparent_power_kilovoltamperes{phase="total",source="genset"}',
-    'genset_power_factor{source="genset"}',
+    'genset_power_factor{phase="total",source="genset"}',
     'genset_frequency_hertz{source="genset"}',
     "genset_battery_volts",
     "genset_oil_pressure_bar",
@@ -108,6 +108,8 @@ def test_live_poll_is_small():
     assert len(read_plan(["live"])) <= 6
     assert len(read_plan(["live", "mains"])) <= 6     # mains V and Hz share live's blocks
     assert len(read_plan(["live", "mains", "flags"])) <= 7
+    # 10385 (battery at the last cranking) is the only register outside the counter blocks
+    assert len(read_plan(["counters"])) == 3
     assert len(read_plan(DEFAULT_GROUP_INTERVALS)) < len(read_plan(GROUPS))
 
 
@@ -135,9 +137,9 @@ def test_schedule(make_controller, make_collector):
     got, read = poll_at(2)                       # within min_poll_interval: cached
     assert reqs == []
 
-    got, read = poll_at(30)                      # per-scrape groups + tables (alarm active)
-    assert read == {"live", "mains", "flags", "alarms"}
-    assert reqs == read_plan(["live", "mains", "flags"]) + read_plan(["alarms"])
+    got, read = poll_at(30)                      # per-scrape groups; tables wait for 60 s
+    assert read == {"live", "mains", "flags"}
+    assert reqs == read_plan(["live", "mains", "flags"])
     assert got["genset_engine_hours_total"] == 700.0  # slow values served from cache
     assert 'genset_alarms{class="warning"}' in got
 
@@ -246,10 +248,15 @@ def test_alarm_flag_triggers_immediate_table_read():
     assert got['genset_alarm_active{bit="17",class="warning",name="Extension input 10"}'] == 1
     assert got['genset_alarms{class="warning"}'] == 1
 
-    # a second warning while the first is active: the summary flags do not change, but the
-    # tables are read on every poll while an alarm is active, so it shows up at once
+    # a second warning while the first is active: the summary flags do not change, so the
+    # tables are not read again before the 60 s alarm interval (3 requests a minute at most)
     reader.words[10537] = 0b110                           # + warning table bit 18
     clock.t += 10
+    reader.requests.clear()
+    got = scrape(col)
+    assert alarm_requests(reader.requests) == []
+    assert got['genset_alarms{class="warning"}'] == 1
+    clock.t += 50                                         # 60 s after the last table read
     reader.requests.clear()
     got = scrape(col)
     assert len(alarm_requests(reader.requests)) == 3
@@ -300,8 +307,9 @@ def test_groups_from_env(monkeypatch):
 # scaling, per-phase power) in the exporter, never by arithmetic in Grafana. And every query
 # must have data with the default polling groups.
 DASHBOARD_FILE = FIXTURES.parent.parent / "dashboards" / "generator.json"
-PLAIN_SELECTOR = re.compile(r'(genset_[a-z_]+)(?:\{((?:\s*[a-z_]+\s*(?:=~|=)\s*"[^"]*"\s*,?)*)\})?')
-MATCHER = re.compile(r'([a-z_]+)\s*(=~|=)\s*"([^"]*)"')
+PLAIN_SELECTOR = re.compile(
+    r'(genset_[a-z_]+)(?:\{((?:\s*[a-z_]+\s*(?:=~|!~|!=|=)\s*"[^"]*"\s*,?)*)\})?')
+MATCHER = re.compile(r'([a-z_]+)\s*(=~|!~|!=|=)\s*"([^"]*)"')
 
 
 def dashboard_exprs():
@@ -328,13 +336,16 @@ def test_dashboard_query_is_plain_exporter_metric(title, expr):
 
 
 def _matches(labels, matchers):
+    """PromQL label matching; a missing label matches like an empty value."""
     for key, op, value in matchers:
-        got = labels.get(key)
-        if got is None:
-            return False
+        got = labels.get(key, "")
         if op == "=" and got != value:
             return False
+        if op == "!=" and got == value:
+            return False
         if op == "=~" and not re.fullmatch(value, got):
+            return False
+        if op == "!~" and re.fullmatch(value, got):
             return False
     return True
 

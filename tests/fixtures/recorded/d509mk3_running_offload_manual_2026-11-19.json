@@ -253,7 +253,7 @@
   "genset_battery_volts": 14.49,
   "genset_charge_input_volts": 14.48,
   "genset_fuel_level_percent": 8.5,
-  "genset_power_factor{source=\"genset\"}": 1.0,
+  "genset_power_factor{phase=\"total\",source=\"genset\"}": 1.0,
   "genset_engine_hours_total": 2.89,
   "genset_runs_total": 6,
   "genset_cranks_total": 9,

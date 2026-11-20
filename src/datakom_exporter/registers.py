@@ -30,17 +30,19 @@ WORD_ORDERS = ("low_first", "high_first")
 GROUPS = ("live", "mains", "flags", "alarms", "counters", "info", "extended")
 GROUP_HELP = {
     "live": "genset voltage/current/per-phase and total power/PF/frequency, battery, charge input, "
-            "oil pressure, oil and coolant temperature, fuel, rpm, status, mode, state timer",
+            "oil pressure, oil and coolant temperature, fuel, rpm, on-board digital inputs, status, "
+            "mode, state timer",
     "mains": "mains voltage and frequency (no extra requests: same blocks as live)",
     "flags": "function flags: mains fail, mains/genset contactor, auto ready, engine running, "
              "alarm summary, service requests, ... (1 request)",
     "alarms": "shutdown / loaddump / warning alarm tables (3 requests); with the flags group "
               "enabled they are read only while an alarm flag is set",
-    "counters": "engine hours, runs, cranks, on-load events, genset kWh, hours to service "
-                "(2 requests)",
+    "counters": "engine hours, runs, cranks, on-load events, genset kWh, hours to service, "
+                "battery voltage during the last cranking (3 requests)",
     "info": "device identity, hardware and software version (1 request)",
     "extended": "line-to-line voltages, reactive power, kVArh, hours/days since service, days to "
-                "service, mains current/power/PF/kVA/energy (zero with CTs on the alternator)",
+                "service, mains current/power/PF (total and per phase)/kVA/energy (zero with CTs on "
+                "the alternator)",
 }
 # seconds between reads; 0 = on every poll (i.e. every scrape, limited by --min-poll-interval).
 # Chosen from the 'Generator' dashboard (dashboards/generator.json): live genset values, mains
@@ -122,10 +124,16 @@ for _src, _p, _q, _s, _pf, _f in (("mains", 10292, 10308, 10324, 10334, 10338),
     _reg(_meas(_src), "genset_apparent_power_kilovoltamperes", _s, 2, False, 10,
          "Apparent power", source=_src, phase="total")
     # D-300 MK3 reports 1000 for PF 1.000 at rest; sign on capacitive load still to verify.
-    _reg(_meas(_src), "genset_power_factor", _pf, 1, True, 1000, "Total power factor",
-         source=_src)
+    _reg(_meas(_src), "genset_power_factor", _pf, 1, True, 1000, "Power factor",
+         source=_src, phase="total")
     _reg("live" if _src == "genset" else "mains", "genset_frequency_hertz", _f, 1, False, 100,
          "Frequency", source=_src)
+
+for _src, _pf in (("mains", 10328), ("genset", 10331)):
+    for _n, _ph in enumerate(("L1", "L2", "L3")):
+        # genset: inside the 10326 block that live already reads, so no extra request
+        _reg(_meas(_src), "genset_power_factor", _pf + _n, 1, True, 1000, "Power factor",
+             source=_src, phase=_ph)
 
 # --- engine -------------------------------------------------------------------------------------
 _reg("live", "genset_charge_input_volts", 10340, 1, False, 100, "Charge alternator input voltage")
@@ -136,6 +144,13 @@ _reg("live", "genset_coolant_temperature_celsius", 10362, 1, True, 10, "Engine c
 _reg("live", "genset_fuel_level_percent", 10363, 1, True, 10, "Fuel level", na=SENSOR_NA)
 _reg("live", "genset_oil_temperature_celsius", 10364, 1, True, 10, "Oil temperature", na=SENSOR_NA)
 _reg("live", "genset_engine_rpm", 10376, 1, False, 1, "Engine speed, rpm")
+# 10373-10374: 2 bits per on-board digital input; the codes are not documented in 500-MODBUS
+# (D-509 MK3: 0b11 for unused inputs). Exported raw; inside the 10361 block, no extra request.
+_reg("live", "genset_digital_inputs_raw", 10373, 2, False, 1,
+     "On-board digital input statuses, 2 bits per input (raw 500-MODBUS 10373-10374)")
+# Updated by the controller only while cranking: one extra request in the slow counters group.
+_reg("counters", "genset_battery_crank_min_volts", 10385, 1, False, 100,
+     "Minimum battery voltage measured during the last cranking")
 
 # --- state --------------------------------------------------------------------------------------
 OPERATION_STATUS: dict[int, str] = {

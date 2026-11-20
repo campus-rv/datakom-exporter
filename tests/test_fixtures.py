@@ -8,6 +8,7 @@ import pytest
 from conftest import all_fixture_files, fixture_words, load_fixture, scrape
 
 from datakom_exporter.collector import decode_snapshot
+from datakom_exporter.registers import READ_PLAN
 from datakom_exporter.sanity import check
 
 FILES = all_fixture_files()
@@ -25,7 +26,14 @@ def test_fixture_scrape_matches_expected(fixture, make_controller, make_collecto
     got = scrape(col)
 
     assert got["genset_modbus_up"] == 1
-    for key, want in fixture.get("expected", {}).items():
+    expected = dict(fixture.get("expected", {}))
+    if "genset_modbus_failed_blocks" in expected:
+        # a dump holds the blocks of the exporter version that recorded it; blocks added to the
+        # register map later are absent and fail like on a controller without them
+        words = fixture_words(fixture)
+        expected["genset_modbus_failed_blocks"] += sum(
+            1 for start, count in READ_PLAN if any(a not in words for a in range(start, start + count)))
+    for key, want in expected.items():
         assert key in got, f"missing {key}"
         assert got[key] == pytest.approx(want), key
     for name in fixture.get("expected_absent", []):

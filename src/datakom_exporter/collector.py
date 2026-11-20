@@ -6,8 +6,9 @@ from the cache. Disabled groups are never read. After a connection failure the c
 dropped, so no stale values are exported while the controller is unreachable.
 
 With the "flags" group enabled, the three alarm tables (3 requests) are read only while the
-controller's "any alarm" flag is set - when the alarm interval is due or as soon as the alarm
-summary flags change. Without an active alarm the tables are known to be all zero.
+controller's "any alarm" flag is set - when the alarm interval is due (also while an alarm
+stays active) or as soon as the alarm summary flags change. Without an active alarm the tables
+are known to be all zero.
 """
 
 from __future__ import annotations
@@ -132,11 +133,11 @@ class DatakomCollector(Collector):
 
         if gate_alarms and snap.connected:
             summary = self._alarm_summary()
+            # Read at the alarm interval, or at once when the summary flags change (an alarm
+            # appears, clears or changes class). A second alarm of an already active class does
+            # not change the summary flags, so it shows up at the next interval.
             changed = summary != self._alarm_summary_at_read
-            # While an alarm is active the tables are read on every poll: a second alarm of
-            # an already active class does not change the summary flags.
-            active = summary is not None and FLAG_ANY_ALARM in summary
-            if "alarms" in due or changed or active:
+            if "alarms" in due or changed:
                 if summary is not None and FLAG_ANY_ALARM not in summary:
                     # no active alarm: the tables are all zero, no need to read them
                     for a in self._group_addrs["alarms"]:

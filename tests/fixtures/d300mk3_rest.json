@@ -24,7 +24,7 @@
   "genset_mode": 1,
   "genset_operation_status": 0,
   "genset_battery_volts": 13.37,
-  "genset_power_factor{source=\"genset\"}": 1.0,
+  "genset_power_factor{phase=\"total\",source=\"genset\"}": 1.0,
   "genset_engine_hours_total": 175.91,
   "genset_voltage_ln_volts{phase=\"L1\",source=\"genset\"}": 0,
   "genset_alarms{class=\"shutdown\"}": 0,

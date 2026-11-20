@@ -63,6 +63,10 @@
   },
   "10634": {
    "s32": 4321
+  },
+  "10385": 1082,
+  "10331": {
+   "s16": 998
   }
  },
  "expected": {
@@ -96,7 +100,9 @@
   "genset_flag{flag=\"engine_running\"}": 1,
   "genset_flag{flag=\"warning_alarm\"}": 1,
   "genset_flag{flag=\"not_in_auto\"}": 1,
-  "genset_alarm_active{bit=\"17\",class=\"warning\",name=\"Extension input 10\"}": 1
+  "genset_alarm_active{bit=\"17\",class=\"warning\",name=\"Extension input 10\"}": 1,
+  "genset_battery_crank_min_volts": 10.82,
+  "genset_power_factor{phase=\"L1\",source=\"genset\"}": 0.998
  },
  "flags": [
   "mains_contactor",
