@@ -32,13 +32,15 @@ WORD_ORDERS = ("low_first", "high_first")
 
 # Polling groups. Each group has its own poll interval (see DEFAULT_GROUP_INTERVALS);
 # a group that is switched off is never read from the controller and never exported.
-GROUPS = ("live", "mains", "flags", "alarms", "counters", "info", "extended")
+GROUPS = ("genset", "engine", "mains", "flags", "alarms", "counters", "info", "extended")
 GROUP_HELP = {
-    "live": "genset voltage/current/per-phase and total power/PF/frequency, battery, charge input, "
-            "oil pressure, oil and coolant temperature, fuel, rpm, on-board digital inputs, status, "
-            "mode, state timer",
+    "genset": "genset (alternator) voltage, frequency, current, active power and PF per phase and "
+              "total, kVA (4 requests on its own)",
+    "engine": "battery, charge input, oil pressure, oil and coolant temperature, fuel, rpm, "
+              "on-board digital inputs, operation status, mode, state timer (3 requests on its own)",
     "mains": "mains voltage, frequency, current, active power and PF per phase and total, kVA "
-             "(+1 request over live; current/power are zero with CTs on the alternator)",
+             "(4 requests on its own, +1 over genset and engine; current/power are zero with "
+             "CTs on the alternator)",
     "flags": "function flags: mains fail, mains/genset contactor, auto ready, engine running, "
              "alarm summary, service requests, ... (1 request)",
     "alarms": "shutdown / loaddump / warning alarm tables (3 requests); with the flags group "
@@ -50,11 +52,14 @@ GROUP_HELP = {
                 "service, mains kVAr/energy (zero with CTs on the alternator)",
 }
 # seconds between reads; 0 = on every poll (i.e. every scrape, limited by --min-poll-interval).
-# Chosen from the 'Generator' dashboard (dashboards/generator.json): live genset values, mains
-# voltage and the AMF state flags every scrape, slow-changing counters and identity rarely.
+# Chosen from the 'Generator' dashboard (dashboards/generator.json): genset, engine and mains
+# values and the state flags every scrape, slow-changing counters and identity rarely. Groups
+# read in the same poll share blocks: genset + engine + mains + flags = 8 requests.
 DEFAULT_GROUP_INTERVALS: dict[str, float] = {
-    "live": 0, "mains": 0, "flags": 0, "alarms": 60, "counters": 300, "info": 3600,
+    "genset": 0, "engine": 0, "mains": 0, "flags": 0, "alarms": 60, "counters": 300, "info": 3600,
 }
+# Groups replaced in a release: a config that still lists them fails with this hint.
+RENAMED_GROUPS = {"live": "split into 'genset' and 'engine' in 0.4.0"}
 
 
 @dataclass(frozen=True)
@@ -101,61 +106,57 @@ SENSOR_NA = (0x7FFF,)
 # Voltage and frequency are measured on both sides. Current, power and PF come from the CTs:
 # with CTs on the alternator output mains current/power/PF read zero, with CTs on the load side
 # the controller reports them per contactor position. Either way they ride along in the blocks
-# that are read anyway, so the mains values are in the per-scrape "mains" group.
-def _meas(src: str) -> str:
-    return "live" if src == "genset" else "mains"
-
+# that are read anyway. Each source has its own group named after it ("mains", "genset").
 
 for _src, _v, _ll, _i in (("mains", 10240, 10252, 10264), ("genset", 10246, 10258, 10270)):
-    _vg = "live" if _src == "genset" else "mains"
     for _n, _ph in enumerate(("L1", "L2", "L3")):
-        _reg(_vg, "genset_voltage_ln_volts", _v + 2 * _n, 2, False, 10,
+        _reg(_src, "genset_voltage_ln_volts", _v + 2 * _n, 2, False, 10,
              "Phase-to-neutral voltage", source=_src, phase=_ph)
         _reg("extended", "genset_voltage_ll_volts", _ll + 2 * _n, 2, False, 10,
              "Line-to-line voltage", source=_src, phase=("L1-L2", "L2-L3", "L3-L1")[_n])
-        _reg(_meas(_src), "genset_current_amperes", _i + 2 * _n, 2, False, 10,
+        _reg(_src, "genset_current_amperes", _i + 2 * _n, 2, False, 10,
              "Phase current", source=_src, phase=_ph)
 
 for _src, _p in (("mains", 10280), ("genset", 10286)):
     for _n, _ph in enumerate(("L1", "L2", "L3")):
-        _reg(_meas(_src), "genset_active_power_kilowatts", _p + 2 * _n, 2, True, 10,
+        _reg(_src, "genset_active_power_kilowatts", _p + 2 * _n, 2, True, 10,
              "Active power", source=_src, phase=_ph)
 
 for _src, _p, _q, _s, _pf, _f in (("mains", 10292, 10308, 10324, 10334, 10338),
                                   ("genset", 10294, 10310, 10326, 10335, 10339)):
-    _reg(_meas(_src), "genset_active_power_kilowatts", _p, 2, True, 10, "Active power",
+    _reg(_src, "genset_active_power_kilowatts", _p, 2, True, 10, "Active power",
          source=_src, phase="total")
     _reg("extended", "genset_reactive_power_kilovars", _q, 2, True, 10, "Reactive power",
          source=_src, phase="total")
     # mains kVA (10324) shifts the 10326 block off the battery registers: +1 request per scrape,
     # accepted so that mains and genset are read alike (genset kVAr is not read every scrape,
     # so neither is mains kVAr)
-    _reg(_meas(_src), "genset_apparent_power_kilovoltamperes", _s, 2, False, 10,
+    _reg(_src, "genset_apparent_power_kilovoltamperes", _s, 2, False, 10,
          "Apparent power", source=_src, phase="total")
     # D-300 MK3 reports 1000 for PF 1.000 at rest; sign on capacitive load still to verify.
-    _reg(_meas(_src), "genset_power_factor", _pf, 1, True, 1000, "Power factor",
+    _reg(_src, "genset_power_factor", _pf, 1, True, 1000, "Power factor",
          source=_src, phase="total")
-    _reg("live" if _src == "genset" else "mains", "genset_frequency_hertz", _f, 1, False, 100,
+    _reg(_src, "genset_frequency_hertz", _f, 1, False, 100,
          "Frequency", source=_src)
 
 for _src, _pf in (("mains", 10328), ("genset", 10331)):
     for _n, _ph in enumerate(("L1", "L2", "L3")):
-        # genset: inside the 10326 block that live already reads, so no extra request
-        _reg(_meas(_src), "genset_power_factor", _pf + _n, 1, True, 1000, "Power factor",
+        # genset: inside the 10326 block that the genset group reads anyway, no extra request
+        _reg(_src, "genset_power_factor", _pf + _n, 1, True, 1000, "Power factor",
              source=_src, phase=_ph)
 
 # --- engine -------------------------------------------------------------------------------------
-_reg("live", "genset_charge_input_volts", 10340, 1, False, 100, "Charge alternator input voltage")
-_reg("live", "genset_battery_volts", 10341, 1, False, 100, "Battery voltage")
-_reg("live", "genset_oil_pressure_bar", 10361, 1, True, 10, "Oil pressure", na=SENSOR_NA)
-_reg("live", "genset_coolant_temperature_celsius", 10362, 1, True, 10, "Engine coolant temperature",
+_reg("engine", "genset_charge_input_volts", 10340, 1, False, 100, "Charge alternator input voltage")
+_reg("engine", "genset_battery_volts", 10341, 1, False, 100, "Battery voltage")
+_reg("engine", "genset_oil_pressure_bar", 10361, 1, True, 10, "Oil pressure", na=SENSOR_NA)
+_reg("engine", "genset_coolant_temperature_celsius", 10362, 1, True, 10, "Engine coolant temperature",
      na=SENSOR_NA)
-_reg("live", "genset_fuel_level_percent", 10363, 1, True, 10, "Fuel level", na=SENSOR_NA)
-_reg("live", "genset_oil_temperature_celsius", 10364, 1, True, 10, "Oil temperature", na=SENSOR_NA)
-_reg("live", "genset_engine_rpm", 10376, 1, False, 1, "Engine speed, rpm")
+_reg("engine", "genset_fuel_level_percent", 10363, 1, True, 10, "Fuel level", na=SENSOR_NA)
+_reg("engine", "genset_oil_temperature_celsius", 10364, 1, True, 10, "Oil temperature", na=SENSOR_NA)
+_reg("engine", "genset_engine_rpm", 10376, 1, False, 1, "Engine speed, rpm")
 # 10373-10374: 2 bits per on-board digital input; the codes are not documented in 500-MODBUS
 # (D-509 MK3: 0b11 for unused inputs). Exported raw; inside the 10361 block, no extra request.
-_reg("live", "genset_digital_inputs_raw", 10373, 2, False, 1,
+_reg("engine", "genset_digital_inputs_raw", 10373, 2, False, 1,
      "On-board digital input statuses, 2 bits per input (raw 500-MODBUS 10373-10374)")
 # Updated by the controller only while cranking: one extra request in the slow counters group.
 _reg("counters", "genset_battery_crank_min_volts", 10385, 1, False, 100,
@@ -172,13 +173,13 @@ OPERATION_STATUS: dict[int, str] = {
     20: "mains cb timer", 21: "stop with cooldown", 22: "cooling down",
     23: "engine stop idle speed", 24: "immediate stop", 25: "engine stopping",
 }
-_reg("live", "genset_operation_status", 10604, 1, False, 1,
+_reg("engine", "genset_operation_status", 10604, 1, False, 1,
      "Unit operation status code: " + ", ".join(f"{k}={v}" for k, v in OPERATION_STATUS.items()))
 # 2 = MANUAL on D-700 / D-509 (flag manual_mode), RUN on D-500
 MODES: dict[int, str] = {1: "STOP", 2: "MANUAL", 4: "AUTO", 8: "TEST"}
-_reg("live", "genset_mode", 10605, 1, False, 1,
+_reg("engine", "genset_mode", 10605, 1, False, 1,
      "Unit mode (" + " ".join(f"{k}={v}" for k, v in MODES.items()) + ")")
-_reg("live", "genset_operation_timer_seconds", 10606, 1, False, 1,
+_reg("engine", "genset_operation_timer_seconds", 10606, 1, False, 1,
      "Remaining time of the current wait state (e.g. mains fail delay, cooling)")
 
 # --- counters -----------------------------------------------------------------------------------

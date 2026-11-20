@@ -24,6 +24,7 @@ from .registers import (
     HW_VERSION_ADDR,
     IDENTITY_ADDR,
     READ_PLAN,
+    RENAMED_GROUPS,
     SW_VERSION_ADDR,
     WORD_ORDER_HINTS,
     WORD_ORDERS,
@@ -106,13 +107,15 @@ def format_groups(groups: dict) -> str:
 
 
 def parse_groups(s: str) -> dict:
-    """'live=0,alarms=60,counters=300' -> {'live': 0.0, ...}; 'name=off' disables a group."""
+    """'genset=0,alarms=60,counters=300' -> {'genset': 0.0, ...}; 'name=off' disables a group."""
     out = {}
     for item in filter(None, (x.strip() for x in s.split(","))):
         name, _, val = item.partition("=")
         name = name.strip()
         if name not in GROUPS:
-            raise argparse.ArgumentTypeError(f"unknown group {name!r}, known: {', '.join(GROUPS)}")
+            hint = f" ({RENAMED_GROUPS[name]})" if name in RENAMED_GROUPS else ""
+            raise argparse.ArgumentTypeError(
+                f"unknown group {name!r}{hint}, known: {', '.join(GROUPS)}")
         val = val.strip() or "0"
         if val.lower() == "off":
             continue

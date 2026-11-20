@@ -109,12 +109,16 @@ def test_default_groups_skip_unused_registers(make_controller, make_collector):
     assert 'genset_alarms{class="warning"}' in got
 
 
-def test_live_poll_is_small():
-    # charge input and oil temperature ride along in existing blocks
-    assert len(read_plan(["live"])) <= 6
-    # mains V, Hz, I, P, PF share live's blocks; mains kVA (10324) costs one more
-    assert len(read_plan(["live", "mains"])) == len(read_plan(["live"])) + 1 == 7
-    assert len(read_plan(["live", "mains", "flags"])) == 8
+def test_per_scrape_poll_is_small():
+    assert len(read_plan(["genset"])) == 4
+    assert len(read_plan(["engine"])) == 3
+    # groups read together share blocks: genset + engine = 6 (the 0.3 "live" group)
+    assert len(read_plan(["genset", "engine"])) == 6
+    # mains V, Hz, I, P, PF share the genset blocks; mains kVA (10324) costs one more
+    assert len(read_plan(["genset", "engine", "mains"])) == 7
+    assert len(read_plan(["genset", "engine", "mains", "flags"])) == 8
+    assert len(read_plan(["mains", "flags"])) == 5          # mains only
+    assert len(read_plan(["engine", "flags"])) == 4
     # 10385 (battery at the last cranking) is the only register outside the counter blocks
     assert len(read_plan(["counters"])) == 3
     assert len(read_plan(DEFAULT_GROUP_INTERVALS)) < len(read_plan(GROUPS))
@@ -145,16 +149,16 @@ def test_schedule(make_controller, make_collector):
     assert reqs == []
 
     got, read = poll_at(30)                      # per-scrape groups; tables wait for 60 s
-    assert read == {"live", "mains", "flags"}
-    assert reqs == read_plan(["live", "mains", "flags"])
+    assert read == {"genset", "engine", "mains", "flags"}
+    assert reqs == read_plan(["genset", "engine", "mains", "flags"])
     assert got["genset_engine_hours_total"] == 700.0  # slow values served from cache
     assert 'genset_alarms{class="warning"}' in got
 
     _, read = poll_at(61)
-    assert read == {"live", "mains", "flags", "alarms"}
+    assert read == {"genset", "engine", "mains", "flags", "alarms"}
 
     _, read = poll_at(301)
-    assert read == {"live", "mains", "flags", "alarms", "counters"}
+    assert read == {"genset", "engine", "mains", "flags", "alarms", "counters"}
 
     _, read = poll_at(3601)
     assert read == set(DEFAULT_GROUP_INTERVALS)
@@ -162,10 +166,12 @@ def test_schedule(make_controller, make_collector):
 
 def test_disabled_groups_are_never_requested(make_controller, make_collector):
     sim = make_controller(running_words())
-    col = make_collector(sim.port, groups={"live": 0})
+    col = make_collector(sim.port, groups={"engine": 0})
     reqs = record_requests(col)
     got = scrape(col)
-    assert reqs == read_plan(["live"])
+    assert reqs == read_plan(["engine"])
+    assert "genset_battery_volts" in got
+    assert not any(k.startswith(("genset_voltage", "genset_current")) for k in got)
     assert "genset_engine_hours_total" not in got
     assert not any(k.startswith("genset_alarm") for k in got)
 
@@ -284,7 +290,7 @@ def test_alarm_flag_triggers_immediate_table_read():
 def test_without_flags_group_alarm_tables_follow_interval(make_controller, make_collector):
     clock = Clock()
     sim = make_controller(rest_words())
-    col = make_collector(sim.port, groups={"live": 0, "alarms": 60}, clock=clock)
+    col = make_collector(sim.port, groups={"engine": 0, "alarms": 60}, clock=clock)
     reqs = record_requests(col)
     scrape(col)
     assert len(alarm_requests(reqs)) == 3
@@ -295,18 +301,33 @@ def test_without_flags_group_alarm_tables_follow_interval(make_controller, make_
 
 
 def test_parse_groups():
-    assert cli.parse_groups("live=0, alarms=60,counters=off") == {"live": 0, "alarms": 60}
-    assert cli.parse_groups("live") == {"live": 0}
-    for bad in ("nope=1", "live=x", "live=off", ""):
+    assert cli.parse_groups("genset=0, alarms=60,counters=off") == {"genset": 0, "alarms": 60}
+    assert cli.parse_groups("engine") == {"engine": 0}
+    for bad in ("nope=1", "genset=x", "genset=off", "", "live=0"):
         with pytest.raises(argparse.ArgumentTypeError):
             cli.parse_groups(bad)
     assert cli.parse_groups(cli.format_groups(DEFAULT_GROUP_INTERVALS)) == DEFAULT_GROUP_INTERVALS
 
 
 def test_groups_from_env(monkeypatch):
-    monkeypatch.setenv("DATAKOM_GROUPS", "live=0,mains=30")
+    monkeypatch.setenv("DATAKOM_GROUPS", "genset=0,engine=0,mains=30")
     a = cli.build_parser().parse_args([])
-    assert a.groups == {"live": 0, "mains": 30}
+    assert a.groups == {"genset": 0, "engine": 0, "mains": 30}
+
+
+def test_old_live_group_is_rejected_with_a_hint():
+    with pytest.raises(argparse.ArgumentTypeError, match="split into 'genset' and 'engine'"):
+        cli.parse_groups("live=0,mains=0")
+
+
+def test_genset_and_engine_cover_every_per_scrape_genset_register():
+    """The 0.3 "live" group: alternator electrical values, engine and state - nothing lost."""
+    old_live = {10246, 10247, 10248, 10249, 10250, 10251, 10270, 10271, 10272, 10273, 10274,
+                10275, 10286, 10287, 10288, 10289, 10290, 10291, 10294, 10295, 10326, 10327,
+                10331, 10332, 10333, 10335, 10339, 10340, 10341, 10361, 10362, 10363, 10364,
+                10373, 10374, 10376, 10604, 10605, 10606}
+    assert set(group_addresses("genset")) | set(group_addresses("engine")) == old_live
+    assert not set(group_addresses("genset")) & set(group_addresses("engine"))
 
 
 # --- the dashboard shipped in dashboards/ ---------------------------------------------------------
@@ -417,7 +438,7 @@ def test_min_poll_interval_counts_from_the_end_of_a_slow_poll():
             return super().poll(plan)
 
     reader = SlowReader(rest_words())
-    col = DatakomCollector(reader, groups={"live": 0}, min_poll_interval=5, clock=clock)
+    col = DatakomCollector(reader, groups={"genset": 0, "engine": 0}, min_poll_interval=5, clock=clock)
     scrape(col)
     reader.requests.clear()
     clock.t += 1                                          # queued scrape right after the poll
@@ -432,10 +453,10 @@ def test_unexpected_reader_error_does_not_fail_the_scrape():
         def poll(self, plan):
             raise ValueError("garbled frame")
 
-    col = DatakomCollector(BrokenReader({}), groups={"live": 0}, min_poll_interval=0, clock=Clock())
+    col = DatakomCollector(BrokenReader({}), groups={"genset": 0, "engine": 0}, min_poll_interval=0, clock=Clock())
     got = scrape(col)
     assert got["genset_modbus_up"] == 0
-    assert got["genset_modbus_failed_blocks"] == len(read_plan(["live"]))
+    assert got["genset_modbus_failed_blocks"] == len(read_plan(["genset", "engine"]))
 
 
 def test_poll_without_due_groups_keeps_the_last_state():
@@ -453,7 +474,7 @@ def test_poll_without_due_groups_keeps_the_last_state():
     assert col._snap.connected is False
 
 
-@pytest.mark.parametrize("value", ["live=nan", "live=-1", "live=inf", "live=x"])
+@pytest.mark.parametrize("value", ["genset=nan", "genset=-1", "genset=inf", "genset=x"])
 def test_bad_group_interval_is_rejected(value):
     with pytest.raises(argparse.ArgumentTypeError):
         cli.parse_groups(value)

@@ -236,7 +236,7 @@ def _flaky(reader, fail_starts):
 def test_lost_response_is_retried_after_reconnect(make_controller, make_collector):
     sim = make_controller(rest_words())
     col = make_collector(sim.port)
-    plan = read_plan(["live"])
+    plan = read_plan(["genset", "engine"])
     _flaky(col.reader, [plan[0][0]])
     snap = col.reader.poll(plan)
     assert snap.connected and snap.failed_blocks == []
@@ -246,7 +246,7 @@ def test_lost_response_is_retried_after_reconnect(make_controller, make_collecto
 def test_lost_response_twice_aborts_the_poll(make_controller, make_collector):
     sim = make_controller(rest_words())
     col = make_collector(sim.port)
-    plan = read_plan(["live"])
+    plan = read_plan(["genset", "engine"])
     _flaky(col.reader, [plan[1][0], plan[1][0]])
     snap = col.reader.poll(plan)
     assert not snap.connected
