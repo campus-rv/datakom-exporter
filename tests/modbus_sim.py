@@ -25,9 +25,19 @@ from pathlib import Path
 from pymodbus.server import ModbusTcpServer
 from pymodbus.simulator import DataType, SimData, SimDevice
 
-from datakom_exporter.registers import FLAGS_ADDR, FUNCTION_FLAGS, READ_PLAN
+from datakom_exporter.registers import (
+    ALARM_BLOCKS,
+    ALARM_WORDS,
+    FLAG_ALARM_SUMMARY,
+    FLAGS_ADDR,
+    FUNCTION_FLAGS,
+    READ_PLAN,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
+# real D-509 MK3 dump (AUTO, mains present, engine stopped) that covers the whole read plan
+IDLE_DUMP = FIXTURES / "recorded" / "d509mk3_auto_mains_present_2026-11-20.json"
+IDLE_BATTERY_VOLTS = 12.59
 
 
 def load_fixture(path: Path) -> dict:
@@ -73,6 +83,20 @@ def flag_words(names, base=None) -> dict[int, int]:
         a = FLAGS_ADDR + b // 16
         out[a] = out.get(a, (base or {}).get(a, 0)) | (1 << (b % 16))
     return out
+
+
+def idle_words() -> dict[int, int]:
+    """IDLE_DUMP without active alarms: alarm summary flags and alarm tables cleared.
+
+    The recorded controller had a Low Fuel warning; tests of the alarm gating need a quiet one.
+    """
+    words = fixture_words(load_fixture(IDLE_DUMP))
+    for b in FLAG_ALARM_SUMMARY:
+        words[FLAGS_ADDR + b // 16] &= ~(1 << (b % 16))
+    for start in ALARM_BLOCKS.values():
+        for a in range(start, start + ALARM_WORDS):
+            words[a] = 0
+    return words
 
 
 def _runs(words: dict[int, int]) -> list[tuple[int, list[int]]]:

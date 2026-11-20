@@ -19,9 +19,8 @@ Prometheus скрейпить його напряму (`/metrics`), без textf
 - На ФС нічого не пише: ні файлів метрик, ні стану, ні кешу, ні `__pycache__`; у журнал —
   лише старт і зміни стану контролера (доступний / недоступний).
 
-Контекст міграції D-300 → D-509, карта регістрів і перевірені факти:
-[docs/GENERATOR_MODBUS_CONTEXT.md](docs/GENERATOR_MODBUS_CONTEXT.md).
-Попередні версії скриптів (gist і textfile-експортер) — у [legacy/](legacy/).
+Вимоги, карта регістрів і джерела — [SPEC.md](SPEC.md).
+Попередній textfile-скрипт і дешборда — [gist](https://gist.github.com/scamp/328ddd0a03e979e141e8c231ba5b2f5c).
 
 ## Встановлення на Raspberry Pi
 
@@ -100,7 +99,7 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 | `DATAKOM_PORT` | 502 | |
 | `DATAKOM_UNIT_ID` | 1 | Modbus address контролера |
 | `DATAKOM_WORD_ORDER` | `low_first` | порядок слів 32-бітних значень (D-300 MK3: `low_first`) |
-| `DATAKOM_TIMEOUT` | 2 | таймаут запиту, с. Відповідь у LAN ≈0.12 с, але 1 с на D-509 дає більше провалених опитувань (запізнілі відповіді) — див. [docs/GENERATOR_MODBUS_CONTEXT.md](docs/GENERATOR_MODBUS_CONTEXT.md) |
+| `DATAKOM_TIMEOUT` | 2 | таймаут запиту, с. Відповідь у LAN ≈0.12 с, але 1 с на D-509 дає більше провалених опитувань (запізнілі відповіді) |
 | `DATAKOM_RETRIES` | 1 | повтори pymodbus на тому самому з'єднанні; якщо й вони без відповіді — ще один повтор після перепідключення |
 | `DATAKOM_REQUEST_DELAY` | 0 | пауза між блоками, с (якщо контролер не встигає) |
 | `DATAKOM_LISTEN` | `:9725` | адреса HTTP |
@@ -144,10 +143,6 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 > `live=<с>` на `genset=<с>,engine=<с>` у `DATAKOM_GROUPS`. Метрики не змінились, кількість
 > запитів теж; змінюється лише значення мітки `group` у
 > `genset_modbus_group_last_read_timestamp_seconds` (`genset`, `engine` замість `live`).
->
-> **Оновлення з 0.4.x.** `DATAKOM_MIN_POLL_INTERVAL` / `--min-poll-interval` перейменовано на
-> `DATAKOM_CACHE_TTL` / `--cache-ttl` (стара назва — помилка запуску з підказкою); за
-> замовчуванням 10 с замість 5.
 
 Приклад: `DATAKOM_GROUPS=genset=0,engine=0,mains=0,flags=0,alarms=60,counters=300,info=3600,extended=600`.
 Лише мережа і стан AMF, без генератора й двигуна: `mains=0,flags=0` — 5 запитів на скрейп. Група, якої
@@ -366,7 +361,7 @@ kWh, запуски / прокрутки), **Mains info** (напруга, ча�
 без видимих осей, щоб зберегти місце), **Run timeline** (статус
 і стан AMF у часі: аварія мережі, контактори, двигун). Назви статусів і режимів на панелях
 — з `registers.OPERATION_STATUS` і `MODES` (тест перевіряє збіг), назви аварій — мітка `name`
-метрики `genset_alarm_active`. Зроблена зі старої версії (`legacy/grafana_gist.json`), стилі
+метрики `genset_alarm_active`. Зроблена зі старої версії (дешборда з gist), стилі
 панелей збережені. Перевірена в Grafana 11.6 на D-509 (2026-11-20). Джерело — сам JSON: правте
 його (або експортуйте з Grafana після змін) і перевіряйте `pytest tests/test_groups.py`.
 
@@ -416,8 +411,7 @@ ruff check src tests
 
 - `tests/modbus_sim.py` піднімає справжній Modbus TCP-сервер pymodbus (`SimDevice`) з
   регістрами з JSON-фікстури; експортер читає його по мережі, як справжній контролер.
-- `tests/fixtures/*.json` — фікстури: D-300 MK3 у спокої і в охолодженні після запуску
-  (реальні значення з історії Prometheus), синтетичні D-300 «запуск у TEST» і D-500
+- `tests/fixtures/*.json` — синтетичні фікстури: D-300 «запуск у TEST» і D-500
   «high word first, зворотна потужність, аварії».
 - `tests/fixtures/recorded/` — сюди кладуться дампи справжніх контролерів
   (`datakom-exporter dump`), вони автоматично потрапляють у ті самі тести. Див. README там.
@@ -432,8 +426,7 @@ datakom-exporter dump --host <ip> --name "D-509 MK3, mains present, AUTO" --out 
 ```
 
 Перше тестування на D-509 MK3 (2026-11-19): ID `0xD512`, порядок слів `low_first`, усі блоки
-читаються, 8/8 live-тестів, скрейп ≈0.83 с (≈120 мс на запит). Деталі — у
-[docs/GENERATOR_MODBUS_CONTEXT.md](docs/GENERATOR_MODBUS_CONTEXT.md). Значення `0x7FFF` аналогових
+читаються, 8/8 live-тестів, скрейп ≈0.83 с (≈120 мс на запит). Значення `0x7FFF` аналогових
 датчиків (датчик не встановлений) не експортуються.
 
 Live-тести (лише читання) перевіряють: ID у 10609, що кожен блок плану читання доступний

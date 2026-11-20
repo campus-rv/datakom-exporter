@@ -7,16 +7,12 @@ import urllib.request
 
 import pytest
 from conftest import FIXTURES, fixture_words, load_fixture, scrape
-from modbus_sim import flag_words, free_port
+from modbus_sim import IDLE_BATTERY_VOLTS, flag_words, free_port, idle_words
 
 from datakom_exporter import cli
 from datakom_exporter.registers import ALARM_BLOCKS, GROUPS, READ_PLAN, read_plan
 
-REST = FIXTURES / "d300mk3_rest.json"
-
-
-def rest_words():
-    return fixture_words(load_fixture(REST))
+rest_words = idle_words
 
 
 def test_controller_down_gives_up_0_quickly(make_collector):
@@ -49,7 +45,7 @@ def test_missing_block_fails_only_that_block(make_controller, make_collector):
     assert got["genset_modbus_request_errors_total"] == 1
     assert 'genset_alarms{class="warning"}' not in got
     assert got['genset_alarms{class="shutdown"}'] == 0
-    assert got["genset_battery_volts"] == pytest.approx(13.37)
+    assert got["genset_battery_volts"] == pytest.approx(IDLE_BATTERY_VOLTS)
 
 
 def test_recovers_after_controller_restart(make_collector):
@@ -151,7 +147,7 @@ def test_serving_scrapes_does_not_write_files(make_controller, monkeypatch):
             REGISTRY.unregister(c)
     text = body.decode()
     assert "genset_modbus_up 1.0" in text
-    assert "genset_battery_volts 13.37" in text
+    assert f"genset_battery_volts {IDLE_BATTERY_VOLTS}" in text
     assert _audit_state["writes"] == []
 
 

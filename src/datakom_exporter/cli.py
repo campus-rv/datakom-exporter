@@ -59,11 +59,6 @@ _uint = _non_negative(int)
 _ufloat = _non_negative(float)
 
 
-# (old name, new name) of options and environment variables renamed in a release
-RENAMED_OPTIONS = (("--min-poll-interval", "--cache-ttl"),
-                   ("DATAKOM_MIN_POLL_INTERVAL", "DATAKOM_CACHE_TTL"))
-
-
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="datakom-exporter", description=__doc__,
                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -95,8 +90,6 @@ def build_parser() -> argparse.ArgumentParser:
                         "of the poll ($DATAKOM_CACHE_TTL). Below the scrape interval it only merges "
                         "concurrent scrapes (HA pair, manual curl, scrapes queued behind a slow "
                         "poll); above it the controller is polled less often than Prometheus scrapes")
-    # renamed in 0.5.0: accepted by the parser only to fail with a hint
-    s.add_argument("--min-poll-interval", default=None, help=argparse.SUPPRESS)
     s.add_argument("--groups", type=parse_groups,
                    default=_env("DATAKOM_GROUPS", format_groups(DEFAULT_GROUP_INTERVALS)),
                    help="polling groups and their intervals in seconds, 0 = every scrape; "
@@ -257,10 +250,6 @@ def dump(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    for old, new in RENAMED_OPTIONS:
-        if old in os.environ or (old.startswith("--") and getattr(args, old[2:].replace("-", "_"))
-                                 is not None):
-            parser.error(f"{old} was renamed to {new} in 0.5.0")
     if not args.host:
         parser.error("controller address is required: --host or $DATAKOM_HOST")
     logging.basicConfig(level=args.log_level.upper() if args.command == "serve" else "WARNING",

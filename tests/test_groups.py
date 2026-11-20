@@ -199,7 +199,8 @@ def test_connection_loss_drops_cache_and_rereads_everything(make_collector):
 
 # --- alarm tables gated by the controller's alarm flags ---------------------------------------------
 def rest_words():
-    return fixture_words(load_fixture(FIXTURES / "d300mk3_rest.json"))
+    from modbus_sim import idle_words
+    return idle_words()
 
 
 def alarm_requests(reqs):
@@ -494,13 +495,3 @@ def test_cache_ttl_default_and_env(monkeypatch):
     monkeypatch.setenv("DATAKOM_CACHE_TTL", "45")
     assert cli.build_parser().parse_args([]).cache_ttl == 45
 
-
-@pytest.mark.parametrize("argv,env", [(["--min-poll-interval", "5"], {}),
-                                      ([], {"DATAKOM_MIN_POLL_INTERVAL": "5"})])
-def test_renamed_min_poll_interval_fails_with_a_hint(argv, env, monkeypatch, capsys):
-    for k, v in env.items():
-        monkeypatch.setenv(k, v)
-    with pytest.raises(SystemExit) as e:
-        cli.main(["--host", "controller.example", *argv])
-    assert e.value.code == 2
-    assert "renamed to" in capsys.readouterr().err

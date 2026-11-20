@@ -15,7 +15,7 @@ values: current, power and PF share the genset blocks, kVA costs one extra reque
 and energy stay in "extended", like genset kVAr. Mains failure and contactor positions come from the
 function flags (11555).
 
-Facts established on the real D-300 MK3 (see docs/GENERATOR_MODBUS_CONTEXT.md):
+Facts established on the real D-300 MK3 (register map and sources: SPEC.md):
 - 32-bit values are stored LOW word first at the listed address, although the
   manual says "high word first". The order is configurable (``--word-order``).
 - The controller answers at most 16 registers per request.
