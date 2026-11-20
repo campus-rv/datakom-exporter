@@ -4,11 +4,16 @@ Source: Datakom "500-MODBUS" application manual, which is common for the D-300,
 D-500 and D-700 families. Addresses are decimal holding-register addresses as
 sent on the wire (FC03, zero-based PDU addresses).
 
-Installation: AMF (automatic mains failure) with the current transformers on the alternator
-output. The controller therefore measures current, power, PF and energy only for the genset;
-for the mains it measures voltage and frequency, and reports mains failure and contactor
-positions through the function flags (11555). Mains current/power registers stay in the
-"extended" group (they read zero with CTs on the alternator side).
+Installation: AMF (automatic mains failure) or ATS (automatic transfer switch); the exporter
+reads the same registers for both. Two current transformer placements are supported:
+- CTs on the alternator output (the D-509 site): current, power, PF and energy are measured for
+  the genset only; mains current/power read zero.
+- CTs on the load side: the controller reports the load current/power as mains or genset values
+  depending on which contactor is closed.
+Mains current, active power, PF and kVA are therefore read on every scrape too, like the genset
+values: current, power and PF share the genset blocks, kVA costs one extra request. Mains kVAr
+and energy stay in "extended", like genset kVAr. Mains failure and contactor positions come from the
+function flags (11555).
 
 Facts established on the real D-300 MK3 (see docs/GENERATOR_MODBUS_CONTEXT.md):
 - 32-bit values are stored LOW word first at the listed address, although the
@@ -32,7 +37,8 @@ GROUP_HELP = {
     "live": "genset voltage/current/per-phase and total power/PF/frequency, battery, charge input, "
             "oil pressure, oil and coolant temperature, fuel, rpm, on-board digital inputs, status, "
             "mode, state timer",
-    "mains": "mains voltage and frequency (no extra requests: same blocks as live)",
+    "mains": "mains voltage, frequency, current, active power and PF per phase and total, kVA "
+             "(+1 request over live; current/power are zero with CTs on the alternator)",
     "flags": "function flags: mains fail, mains/genset contactor, auto ready, engine running, "
              "alarm summary, service requests, ... (1 request)",
     "alarms": "shutdown / loaddump / warning alarm tables (3 requests); with the flags group "
@@ -41,8 +47,7 @@ GROUP_HELP = {
                 "battery voltage during the last cranking (3 requests)",
     "info": "device identity, hardware and software version (1 request)",
     "extended": "line-to-line voltages, reactive power, kVArh, hours/days since service, days to "
-                "service, mains current/power/PF (total and per phase)/kVA/energy (zero with CTs on "
-                "the alternator)",
+                "service, mains kVAr/energy (zero with CTs on the alternator)",
 }
 # seconds between reads; 0 = on every poll (i.e. every scrape, limited by --min-poll-interval).
 # Chosen from the 'Generator' dashboard (dashboards/generator.json): live genset values, mains
@@ -94,10 +99,11 @@ SENSOR_NA = (0x7FFF,)
 
 # --- electrical measurements --------------------------------------------------------------------
 # Voltage and frequency are measured on both sides. Current, power and PF come from the CTs:
-# on the alternator output in this AMF installation, so mains current/power/PF go to
-# "extended" (with CTs on the load side the controller reports them per contactor position).
+# with CTs on the alternator output mains current/power/PF read zero, with CTs on the load side
+# the controller reports them per contactor position. Either way they ride along in the blocks
+# that are read anyway, so the mains values are in the per-scrape "mains" group.
 def _meas(src: str) -> str:
-    return "live" if src == "genset" else "extended"
+    return "live" if src == "genset" else "mains"
 
 
 for _src, _v, _ll, _i in (("mains", 10240, 10252, 10264), ("genset", 10246, 10258, 10270)):
@@ -121,6 +127,9 @@ for _src, _p, _q, _s, _pf, _f in (("mains", 10292, 10308, 10324, 10334, 10338),
          source=_src, phase="total")
     _reg("extended", "genset_reactive_power_kilovars", _q, 2, True, 10, "Reactive power",
          source=_src, phase="total")
+    # mains kVA (10324) shifts the 10326 block off the battery registers: +1 request per scrape,
+    # accepted so that mains and genset are read alike (genset kVAr is not read every scrape,
+    # so neither is mains kVAr)
     _reg(_meas(_src), "genset_apparent_power_kilovoltamperes", _s, 2, False, 10,
          "Apparent power", source=_src, phase="total")
     # D-300 MK3 reports 1000 for PF 1.000 at rest; sign on capacitive load still to verify.

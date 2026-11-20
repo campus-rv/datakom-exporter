@@ -94,10 +94,16 @@ def test_default_groups_skip_unused_registers(make_controller, make_collector):
                                  "genset_service_hours_since")) for k in got)
     assert 'genset_service_hours_to{service="1"}' in got
     assert 'genset_active_power_kilowatts{phase="L1",source="genset"}' in got
-    # AMF with CTs on the alternator: mains current/power/PF are not measured, not exported
+    # mains current/power/PF/kVA are read like the genset ones (CTs on the load side measure them;
+    # with CTs on the alternator they read 0); kVAr and energy only in extended
+    for name in ("genset_current_amperes", "genset_active_power_kilowatts", "genset_power_factor"):
+        for ph in ("L1", "L2", "L3"):
+            assert f'{name}{{phase="{ph}",source="mains"}}' in got
+    assert 'genset_active_power_kilowatts{phase="total",source="mains"}' in got
+    assert 'genset_power_factor{phase="total",source="mains"}' in got
+    assert 'genset_apparent_power_kilovoltamperes{phase="total",source="mains"}' in got
     assert not any('source="mains"' in k and k.startswith(
-        ("genset_current", "genset_active_power", "genset_power_factor", "genset_apparent"))
-        for k in got)
+        ("genset_reactive", "genset_active_energy")) for k in got)
     assert 'genset_flag{flag="mains_fail"}' in got
     assert "genset_controller_info" in " ".join(got)
     assert 'genset_alarms{class="warning"}' in got
@@ -106,8 +112,9 @@ def test_default_groups_skip_unused_registers(make_controller, make_collector):
 def test_live_poll_is_small():
     # charge input and oil temperature ride along in existing blocks
     assert len(read_plan(["live"])) <= 6
-    assert len(read_plan(["live", "mains"])) <= 6     # mains V and Hz share live's blocks
-    assert len(read_plan(["live", "mains", "flags"])) <= 7
+    # mains V, Hz, I, P, PF share live's blocks; mains kVA (10324) costs one more
+    assert len(read_plan(["live", "mains"])) == len(read_plan(["live"])) + 1 == 7
+    assert len(read_plan(["live", "mains", "flags"])) == 8
     # 10385 (battery at the last cranking) is the only register outside the counter blocks
     assert len(read_plan(["counters"])) == 3
     assert len(read_plan(DEFAULT_GROUP_INTERVALS)) < len(read_plan(GROUPS))
