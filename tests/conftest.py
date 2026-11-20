@@ -38,7 +38,7 @@ def scrape(collector) -> dict[str, float]:
 
 
 def all_fixture_files():
-    return sorted(FIXTURES.glob("*.json")) + sorted((FIXTURES / "recorded").glob("*.json"))
+    return sorted((FIXTURES / "recorded").glob("*.json"))
 
 
 @pytest.fixture

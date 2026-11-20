@@ -1,13 +1,13 @@
 """End-to-end: fixture registers -> pymodbus TCP server -> exporter -> Prometheus exposition.
 
-Every JSON under tests/fixtures/ (and tests/fixtures/recorded/, where dumps from real
-controllers go) is picked up automatically.
+Every dump from a real controller under tests/fixtures/recorded/ is picked up automatically,
+once as recorded (low_first) and once with the 32-bit words swapped (high_first).
 """
 
 import pytest
 from conftest import all_fixture_files, fixture_words, load_fixture, scrape
 
-from datakom_exporter.registers import READ_PLAN
+from datakom_exporter.registers import READ_PLAN, REGISTERS
 
 FILES = all_fixture_files()
 
@@ -37,3 +37,33 @@ def test_fixture_scrape_matches_expected(fixture, make_controller, make_collecto
     for name in fixture.get("expected_absent", []):
         assert not any(k == name or k.startswith(name + "{") for k in got), f"{name} exported"
 
+
+
+def swap_words(words: dict[int, int]) -> dict[int, int]:
+    """The same registers as a high-word-first controller would hold them."""
+    out = dict(words)
+    for r in REGISTERS:
+        lo, hi = r.address, r.address + 1
+        if r.words == 2 and lo in words and hi in words:
+            out[lo], out[hi] = words[hi], words[lo]
+    return out
+
+
+RECORDED = [f for f in FILES if f.parent.name == "recorded"]
+
+
+@pytest.mark.parametrize("path", RECORDED, ids=[f.stem for f in RECORDED])
+def test_high_first_controller_decodes_the_same(path, make_controller, make_collector):
+    """No real high_first controller is at hand: swap the 32-bit words of a recorded dump."""
+    fx = load_fixture(path)
+    assert fx["word_order"] == "low_first"
+    words = fixture_words(fx)
+    low = scrape(make_collector(make_controller(words).port, word_order="low_first"))
+    high = scrape(make_collector(make_controller(swap_words(words)).port, word_order="high_first"))
+
+    def values(got):
+        return {k: v for k, v in got.items()
+                if not k.startswith(("genset_modbus_", "genset_controller_info"))}
+
+    assert values(high) == values(low)
+    assert swap_words(words) != words

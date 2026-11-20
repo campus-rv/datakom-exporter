@@ -7,18 +7,29 @@ import re
 
 import pytest
 from conftest import FIXTURES, fixture_words, load_fixture
+from modbus_sim import flag_words, running_words
 from prometheus_client import CollectorRegistry, generate_latest
 from prometheus_client.parser import text_string_to_metric_families
 from test_groups import MATCHER, PLAIN_SELECTOR, _matches
 
-from datakom_exporter.registers import DEFAULT_GROUP_INTERVALS, FUNCTION_FLAGS
+from datakom_exporter.registers import ALARM_BLOCKS, DEFAULT_GROUP_INTERVALS, FUNCTION_FLAGS
 
 ALERTS_FILE = FIXTURES.parent.parent / "alerts" / "generator-alerts.json"
 DASHBOARD_FILE = FIXTURES.parent.parent / "dashboards" / "generator.json"
-# a real D-509 dump with an active warning alarm and a synthetic D-500 with a shutdown alarm,
-# so genset_alarm_active is exported for both rule kinds
-ALARM_FIXTURES = [FIXTURES / "recorded" / "d509mk3_stopped_mains_absent_2026-11-19.json",
-                  FIXTURES / "d500mk3_parallel_high_first.json"]
+# a real D-509 dump with an active warning alarm; the recorded dumps have no shutdown alarm, so the
+# running dump gets one injected (shutdown table bit 3 + shutdown_alarm flag) for the other rule kind
+ALARM_FIXTURE = FIXTURES / "recorded" / "d509mk3_stopped_mains_absent_2026-11-19.json"
+
+
+def shutdown_words() -> dict[int, int]:
+    words = running_words()
+    words[ALARM_BLOCKS["shutdown"]] |= 1 << 3
+    words.update(flag_words(["shutdown_alarm"], base=words))
+    return words
+
+
+def alarm_word_sets() -> list[dict[int, int]]:
+    return [fixture_words(load_fixture(ALARM_FIXTURE)), shutdown_words()]
 EXPORTER_UP = 'up{job="datakom-exporter"}'
 SEVERITIES = {"critical", "warning"}
 
@@ -88,11 +99,9 @@ def test_rule_links_to_existing_dashboard_panel(rule):
                          ids=lambda r: r["uid"])
 def test_rule_query_has_data_with_default_groups(rule, make_controller, make_collector):
     samples = []
-    for path in ALARM_FIXTURES:
-        fx = load_fixture(path)
-        sim = make_controller(fixture_words(fx), unit_id=fx.get("unit_id", 1))
-        col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS, unit_id=fx.get("unit_id", 1),
-                             word_order=fx.get("word_order", "low_first"))
+    for words in alarm_word_sets():
+        sim = make_controller(words)
+        col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS)
         reg = CollectorRegistry()
         reg.register(col)
         samples += [s for fam in text_string_to_metric_families(generate_latest(reg).decode())

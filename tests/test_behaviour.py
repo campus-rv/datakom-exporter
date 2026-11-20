@@ -6,8 +6,8 @@ import threading
 import urllib.request
 
 import pytest
-from conftest import FIXTURES, fixture_words, load_fixture, scrape
-from modbus_sim import IDLE_BATTERY_VOLTS, flag_words, free_port, idle_words
+from conftest import fixture_words, scrape
+from modbus_sim import IDLE_BATTERY_VOLTS, flag_words, free_port, idle_words, running_words
 
 from datakom_exporter import cli
 from datakom_exporter.registers import ALARM_BLOCKS, GROUPS, READ_PLAN, read_plan
@@ -153,28 +153,25 @@ def test_serving_scrapes_does_not_write_files(make_controller, monkeypatch):
 
 # --- CLI ----------------------------------------------------------------------------------------
 def test_probe_reports_model_and_word_order(make_controller, capsys):
-    fx = load_fixture(FIXTURES / "d300mk3_running_offload.json")
-    sim = make_controller(fixture_words(fx))
+    sim = make_controller(running_words())
     rc = cli.main(["probe", "--host", "127.0.0.1", "--port", str(sim.port)])
     out = capsys.readouterr().out
-    assert "D-300" in out
-    assert "D-300 (0xd300)" in out and "supported" in out
+    assert "D-509 (0xd512)" in out and "supported" in out
     assert "word order: low_first" in out and "OK" in out
     assert rc == 0
 
 
 def test_probe_flags_word_order_mismatch(make_controller, capsys):
-    fx = load_fixture(FIXTURES / "d500mk3_parallel_high_first.json")
-    sim = make_controller(fixture_words(fx))
+    sim = make_controller(running_words())
     rc = cli.main(["probe", "--host", "127.0.0.1", "--port", str(sim.port),
-                   "--word-order", "low_first"])
+                   "--word-order", "high_first"])
     out = capsys.readouterr().out
-    assert "MISMATCH, set --word-order high_first" in out
+    assert "MISMATCH, set --word-order low_first" in out
     assert rc == 1
 
 
 def test_probe_rejects_unknown_controller(make_controller, capsys):
-    words = fixture_words(load_fixture(FIXTURES / "d300mk3_running_offload.json"))
+    words = running_words()
     words[10609] = 0x1234
     sim = make_controller(words)
     rc = cli.main(["probe", "--host", "127.0.0.1", "--port", str(sim.port)])
@@ -185,7 +182,7 @@ def test_probe_rejects_unknown_controller(make_controller, capsys):
 def test_probe_reads_only_identity_and_word_order_pairs(make_controller, monkeypatch, capsys):
     from datakom_exporter.modbus import ControllerReader
 
-    sim = make_controller(fixture_words(load_fixture(FIXTURES / "d300mk3_running_offload.json")))
+    sim = make_controller(running_words())
     reqs = []
     orig = ControllerReader.read_block
     monkeypatch.setattr(ControllerReader, "read_block",
@@ -203,15 +200,14 @@ def test_probe_unreachable(capsys):
 
 def test_dump_roundtrip(make_controller, capsys, tmp_path):
     """`dump` output is a fixture that reproduces the same scrape."""
-    fx = load_fixture(FIXTURES / "d300mk3_running_offload.json")
-    sim = make_controller(fixture_words(fx))
+    sim = make_controller(running_words())
     assert cli.main(["dump", "--host", "127.0.0.1", "--port", str(sim.port)]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc["source"] == "recorded"
-    assert doc["device_identity"] == "0xd300"
+    assert doc["device_identity"] == "0xd512"
     assert doc["word_order_guess"] == "low_first"
     assert len(doc["blocks"]) == len(READ_PLAN)
-    assert fixture_words(doc) == {a: v for a, v in fixture_words(fx).items()}
+    assert fixture_words(doc) == running_words()
 
 
 def test_env_configuration(monkeypatch):

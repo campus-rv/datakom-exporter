@@ -38,6 +38,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 # real D-509 MK3 dump (AUTO, mains present, engine stopped) that covers the whole read plan
 IDLE_DUMP = FIXTURES / "recorded" / "d509mk3_auto_mains_present_2026-11-20.json"
 IDLE_BATTERY_VOLTS = 12.59
+# real D-509 MK3 dump (MANUAL, engine running on load, low fuel warning) covering the read plan
+RUNNING_DUMP = FIXTURES / "recorded" / "d509mk3_running_on_load_manual_2026-11-20.json"
+RUNNING_ENGINE_HOURS = 3.8
 
 
 def load_fixture(path: Path) -> dict:
@@ -83,6 +86,11 @@ def flag_words(names, base=None) -> dict[int, int]:
         a = FLAGS_ADDR + b // 16
         out[a] = out.get(a, (base or {}).get(a, 0)) | (1 << (b % 16))
     return out
+
+
+def running_words() -> dict[int, int]:
+    """RUNNING_DUMP as is: engine on load, warning flag and alarm table bit set."""
+    return fixture_words(load_fixture(RUNNING_DUMP))
 
 
 def idle_words() -> dict[int, int]:

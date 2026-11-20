@@ -5,7 +5,8 @@ import json
 import re
 
 import pytest
-from conftest import FIXTURES, fixture_words, load_fixture, scrape
+from conftest import FIXTURES, scrape
+from modbus_sim import RUNNING_ENGINE_HOURS, running_words
 from prometheus_client import CollectorRegistry, generate_latest
 from prometheus_client.parser import text_string_to_metric_families
 
@@ -58,10 +59,6 @@ class Clock:
         return self.t
 
 
-def running_words():
-    return fixture_words(load_fixture(FIXTURES / "d300mk3_running_offload.json"))
-
-
 def record_requests(col):
     starts = []
     orig = col.reader.read_block
@@ -78,15 +75,22 @@ def test_every_register_has_a_known_group():
     assert {r.group for r in REGISTERS} <= set(GROUPS)
 
 
+def dashboard_words():
+    """running_words() with an oil temperature sensor: the recorded D-509 has none (32767)."""
+    words = running_words()
+    words[10364] = 853
+    return words
+
+
 def test_dashboard_needs_only_default_groups(make_controller, make_collector):
-    sim = make_controller(running_words())
+    sim = make_controller(dashboard_words())
     got = scrape(make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS))
     missing = [k for k in DASHBOARD if k not in got]
     assert missing == []
 
 
 def test_default_groups_skip_unused_registers(make_controller, make_collector):
-    sim = make_controller(running_words())
+    sim = make_controller(dashboard_words())
     got = scrape(make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS))
     assert 'genset_voltage_ln_volts{phase="L1",source="mains"}' in got
     assert "genset_oil_temperature_celsius" in got and "genset_charge_input_volts" in got
@@ -151,7 +155,7 @@ def test_schedule(make_controller, make_collector):
     got, read = poll_at(30)                      # per-scrape groups; tables wait for 60 s
     assert read == {"genset", "engine", "mains", "flags"}
     assert reqs == read_plan(["genset", "engine", "mains", "flags"])
-    assert got["genset_engine_hours_total"] == 700.0  # slow values served from cache
+    assert got["genset_engine_hours_total"] == RUNNING_ENGINE_HOURS  # slow values served from cache
     assert 'genset_alarms{class="warning"}' in got
 
     _, read = poll_at(61)
@@ -183,7 +187,7 @@ def test_connection_loss_drops_cache_and_rereads_everything(make_collector):
     port = free_port()
     with SimController(running_words(), port=port):
         col = make_collector(port, groups=DEFAULT_GROUP_INTERVALS, clock=clock)
-        assert scrape(col)["genset_engine_hours_total"] == 700.0
+        assert scrape(col)["genset_engine_hours_total"] == RUNNING_ENGINE_HOURS
     clock.t += 30
     got = scrape(col)
     assert got["genset_modbus_up"] == 0
@@ -193,7 +197,7 @@ def test_connection_loss_drops_cache_and_rereads_everything(make_collector):
         reqs = record_requests(col)
         got = scrape(col)
     assert got["genset_modbus_up"] == 1
-    assert got["genset_engine_hours_total"] == 700.0
+    assert got["genset_engine_hours_total"] == RUNNING_ENGINE_HOURS
     assert len(reqs) == len(read_plan(NON_ALARM_DEFAULTS)) + len(read_plan(["alarms"]))
 
 
@@ -382,7 +386,7 @@ def _matches(labels, matchers):
 @pytest.mark.parametrize("name,matchers", dashboard_selectors(),
                          ids=lambda v: v if isinstance(v, str) else ",".join("".join(x) for x in v))
 def test_dashboard_query_has_data_with_default_groups(name, matchers, make_controller, make_collector):
-    sim = make_controller(running_words())
+    sim = make_controller(dashboard_words())
     col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS)
     reg = CollectorRegistry()
     reg.register(col)

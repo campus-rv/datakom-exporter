@@ -83,7 +83,7 @@ D-700), і вгадує порядок слів (`low_first` / `high_first`), п
 загальна), PF (по фазах і загальний) і kVA **обох** джерел читаються кожен скрейп (група
 `genset` для генератора, `mains` для мережі). Струм, потужність і PF мережі лежать у тих самих
 блоках, що й генераторні, kVA мережі — +1 запит. kVAr і kWh мережі, як і kVAr генератора, — у
-`extended`. На дешборді значення мережі поки не показуються.
+`extended`. На дешборді з мережі показуються напруга, частота й стан (прапорці, контактори); струм і потужність мережі — ні.
 
 На залізі перевірено лише AMF з CT на генераторі (D-509, 2026-11-19/20). ATS і CT на боці
 навантаження підтримуються тим самим набором регістрів за 500-MODBUS, але ще не перевірені.
@@ -347,24 +347,42 @@ groups:
 | GPS, GPRS IP, LCD, Ethernet, MAC / UID / IMEI | 10 | 0 | 0 | немає модема; лічильники Ethernet на D-509 = 0; адреси — інфраструктура |
 | Multi-genset, 11175–11378 | 7 | 0 | 0 | одиночна установка |
 
-### Дашборда "Generator"
+### Дешборда "Generator"
 
-[dashboards/generator.json](dashboards/generator.json) — нова дешборда **"Generator
-(datakom-exporter)"** з власним uid `21ec9aa7-edb0-4f77-87be-d054eb9f0b39`: імпорт створює її
-поруч зі старою "Generator", не перезаписуючи її. Це стара дешборда, переведена на `genset_*` і перебудована в rows:
-**Genset status / mode** (статус і режим з назвами, зв'язок з контролером, активні аварії з
-назвами з 500-MODBUS, батарея, мотогодини
-(загальні і до сервісу 1),
-kWh, запуски / прокрутки), **Mains info** (напруга, частота, мережа OK/FAIL, контактори мережі й
-генератора, auto ready, двигун, таймер стану), **Genset info** (U, I по фазах, загальна потужність, частота,
-історія потужності), **Engine info** (rpm, тиск масла, ОР, напруга батареї при останній прокрутці, зарядний вхід,
-паливо, графік двигуна: дві осі — °C ліворуч (ОР), rpm праворуч; тиск масла і паливо мають власні шкали
-без видимих осей, щоб зберегти місце), **Run timeline** (статус
-і стан AMF у часі: аварія мережі, контактори, двигун). Назви статусів і режимів на панелях
-— з `registers.OPERATION_STATUS` і `MODES` (тест перевіряє збіг), назви аварій — мітка `name`
-метрики `genset_alarm_active`. Зроблена зі старої версії (дешборда з gist), стилі
-панелей збережені. Перевірена в Grafana 11.6 на D-509 (2026-11-20). Джерело — сам JSON: правте
-його (або експортуйте з Grafana після змін) і перевіряйте `pytest tests/test_groups.py`.
+[dashboards/generator.json](dashboards/generator.json) — дешборда **"Generator (datakom-exporter)"**
+з власним uid `21ec9aa7-edb0-4f77-87be-d054eb9f0b39`: імпорт створює її поруч зі старою
+"Generator", не перезаписуючи її. Джерело даних — Prometheus (змінна `DS_PROMETHEUS_ID`), екземпляр
+експортера вибирається змінною `instance` (`label_values(genset_mode, instance)`). Оновлення 30 с,
+діапазон за замовчуванням 24 год; перевірена в Grafana 11.6 на D-509 (2026-11-20).
+
+30 панелей у п'яти рядах:
+
+| Ряд | Панелі | Метрики | Що показують |
+|---|---|---|---|
+| Genset status / mode | Status, Mode | `genset_operation_status`, `genset_mode` | стан і режим контролера з назвами (спокій, робота без навантаження, генератор під навантаженням; STOP / MANUAL / AUTO) |
+| | Controller link | `genset_modbus_up` | зв'язок експортера з контролером |
+| | Alarms | `genset_alarm_active` | таблиця активних аварій з назвами з 500-MODBUS |
+| | Battery Voltage | `genset_battery_volts` | напруга батареї, норма 11,9–14,8 В |
+| | Engine hours, Energy, Runs / cranks | `genset_engine_hours_total`, `genset_service_hours_to{service="1"}`, `genset_active_energy_kilowatthours_total`, `genset_runs_total`, `genset_cranks_total`, `genset_on_load_total` | мотогодини і години до сервісу 1, енергія, запуски, прокрутки, виходи на навантаження |
+| Mains info | Mains voltage, Mains frequency | `genset_voltage_ln_volts{source="mains"}`, `genset_frequency_hertz{source="mains"}` | напруга по фазах (норма 172,5–264,5 В) і частота мережі (49–51 Гц) |
+| | Mains, Mains contactor, Genset contactor, Auto ready, Engine state | `genset_flag{flag=…}`: `mains_fail`, `mains_contactor`, `genset_contactor`, `auto_ready`, `engine_running` | стан схеми AMF |
+| | State timer | `genset_operation_timer_seconds` | скільки лишилось до кінця поточного очікування |
+| Genset info | Genset voltage, Genset current | `genset_voltage_ln_volts`, `genset_current_amperes` (`source="genset"`) | напруга і струм по фазах |
+| | Genset power, Genset power per phase | `genset_active_power_kilowatts` | загальна потужність і графік по фазах |
+| | Genset frequency | `genset_frequency_hertz{source="genset"}` | частота генератора (49–51 Гц) |
+| Engine info | RPM, Oil pressure, Coolant temperature | `genset_engine_rpm`, `genset_oil_pressure_bar`, `genset_coolant_temperature_celsius` | показники двигуна |
+| | Last crank voltage, Charge input | `genset_battery_crank_min_volts`, `genset_charge_input_volts` | мінімум батареї при останній прокрутці, напруга зарядного входу |
+| | Engine | rpm, температура ОР, тиск масла | графік: °C ліворуч, rpm праворуч, тиск має власну шкалу |
+| | Fuel level | `genset_fuel_level_percent` | паливо, помаранчевий нижче 50 %, червоний нижче 25 % |
+| Run timeline | Operation status, AMF | `genset_operation_status`, `genset_flag` (`mains_fail`, контактори) | стан і AMF у часі: аварія мережі, двигун, контактор генератора, повернення |
+
+Усі запити — прості селектори `genset_*` без арифметики: одиниці, масштаб і потужність по
+фазах нормалізує експортер. Тест `test_dashboard_query_is_plain_exporter_metric` падає на
+будь-якому `* / + sum(...)`. Назви статусів і режимів на панелях беруться з
+`registers.OPERATION_STATUS` і `MODES` (тест перевіряє збіг), назви аварій — з мітки `name` метрики
+`genset_alarm_active`. Пороги батареї (11,9–14,8 В) і палива (25 %) збігаються з правилами
+алертів, тож змінювати їх треба разом. Струм і потужність мережі на дешборді не показуються
+(CT стоять на генераторі), як і kVA, kVAr та kWh.
 
 ![Дешборда: Genset status / mode, Mains info, Genset info](docs/dash1.png)
 
@@ -374,33 +392,8 @@ kWh, запуски / прокрутки), **Mains info** (напруга, ча�
 Low Fuel Level; на часовій шкалі — два відпрацювання AMF (аварія мережі → двигун → контактор
 генератора → повернення на мережу).
 
-Кожен запит дешборди — простий селектор метрики `genset_*`, без арифметики: одиниці,
-масштаб і потужність по фазах нормалізує експортер. Тест `test_dashboard_query_is_plain_exporter_metric`
-падає на будь-якому `* / + sum(...)` у запиті.
-
-Заміна запитів (для довідки):
-
-| Було | Стало |
-|---|---|
-| `gen_phaseN_voltage/10` | `genset_voltage_ln_volts{source="genset",phase="LN"}` |
-| `gen_phaseN_current*0.1` | `genset_current_amperes{source="genset",phase="LN"}` |
-| `gen_total_active_power*0.1` | `genset_active_power_kilowatts{source="genset",phase="total"}` |
-| `gen_total_apparent_power*0.1` | `genset_apparent_power_kilovoltamperes{source="genset",phase="total"}` |
-| `gen_total_power_factor*0.1` (%) | `genset_power_factor{source="genset",phase="total"}` (−1…1, одиниця `percentunit`) |
-| `gen_frequency/100` | `genset_frequency_hertz{source="genset"}` |
-| `gen_battery_voltage/100` | `genset_battery_volts` |
-| `gen_oil_pressure/10` | `genset_oil_pressure_bar` |
-| `gen_engine_temp*0.1` | `genset_coolant_temperature_celsius` |
-| `gen_fuel_level/10` | `genset_fuel_level_percent` |
-| `gen_engine_rpm` | `genset_engine_rpm` |
-| `gen_operation_status`, `gen_mode` | `genset_operation_status`, `genset_mode` (ті самі коди) |
-| `gen_engine_hours_run/100` | `genset_engine_hours_total` |
-| змінна `label_values(gen_mode, instance)` | `label_values(genset_mode, instance)` |
-
-Панель "Power" (timeseries) рахувала потужність як I×U по фазах. Тепер експортер віддає
-активну потужність по фазах з контролера (регістри 10280–10291):
-`genset_active_power_kilowatts{source="genset",phase=~"L[123]"}` — без додаткових запитів,
-ці регістри потрапляють в уже наявні блоки.
+Джерело дешборди — сам JSON: правте його (або експортуйте з Grafana після змін) і запускайте
+`pytest tests/test_groups.py`.
 
 ## Розробка і тести
 
@@ -412,10 +405,9 @@ ruff check src tests
 
 - `tests/modbus_sim.py` піднімає справжній Modbus TCP-сервер pymodbus (`SimDevice`) з
   регістрами з JSON-фікстури; експортер читає його по мережі, як справжній контролер.
-- `tests/fixtures/*.json` — синтетичні фікстури: D-300 «запуск у TEST» і D-500
-  «high word first, зворотна потужність, аварії».
-- `tests/fixtures/recorded/` — сюди кладуться дампи справжніх контролерів
-  (`datakom-exporter dump`), вони автоматично потрапляють у ті самі тести. Див. README там.
+- `tests/fixtures/recorded/` — лише дампи справжніх контролерів (`datakom-exporter dump`),
+  синтетичних фікстур немає. Кожен дамп автоматично перевіряється двічі: як записаний
+  (`low_first`) і з переставленими словами 32-бітних регістрів (`high_first`). Див. README там.
 
 ### Перевірка на новому контролері (D-509 MK3)
 
