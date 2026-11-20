@@ -1,7 +1,7 @@
 # Recorded controller dumps
 
 Dumps from real controllers go here. Every `*.json` in this folder is picked up by
-`tests/test_fixtures.py` automatically (scrape end-to-end + plausibility checks).
+`tests/test_fixtures.py` automatically (end-to-end scrape against the expected values).
 
 Record one (read-only, FC03 only) from a machine that can reach the controller:
 

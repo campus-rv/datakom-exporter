@@ -7,9 +7,7 @@ controllers go) is picked up automatically.
 import pytest
 from conftest import all_fixture_files, fixture_words, load_fixture, scrape
 
-from datakom_exporter.collector import decode_snapshot
 from datakom_exporter.registers import READ_PLAN
-from datakom_exporter.sanity import check
 
 FILES = all_fixture_files()
 
@@ -39,19 +37,3 @@ def test_fixture_scrape_matches_expected(fixture, make_controller, make_collecto
     for name in fixture.get("expected_absent", []):
         assert not any(k == name or k.startswith(name + "{") for k in got), f"{name} exported"
 
-
-def test_fixture_values_are_plausible(fixture):
-    words = fixture_words(fixture)
-    problems = check(decode_snapshot(words, fixture.get("word_order", "low_first")))
-    assert problems == []
-
-
-def test_fixture_wrong_word_order_is_detected_as_implausible(fixture):
-    """Guard for the probe: decoding with the wrong order must not look plausible."""
-    words = fixture_words(fixture)
-    voltage_set = any(words.get(a) for a in (10240, 10241, 10246, 10247))
-    hours_set = words.get(10622) or words.get(10623)
-    if not (voltage_set or hours_set):
-        pytest.skip("no 32-bit values set in this fixture")
-    wrong = "high_first" if fixture.get("word_order", "low_first") == "low_first" else "low_first"
-    assert check(decode_snapshot(words, wrong)) != []

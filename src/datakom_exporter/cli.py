@@ -23,6 +23,7 @@ from .registers import (
     GROUPS,
     HW_VERSION_ADDR,
     IDENTITY_ADDR,
+    KNOWN_MODELS,
     READ_PLAN,
     RENAMED_GROUPS,
     SW_VERSION_ADDR,
@@ -30,6 +31,7 @@ from .registers import (
     WORD_ORDERS,
     guess_word_order,
     model_name,
+    plan_blocks,
 )
 
 log = logging.getLogger("datakom_exporter")
@@ -64,7 +66,8 @@ def build_parser() -> argparse.ArgumentParser:
                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("--version", action="version", version=__version__)
     p.add_argument("command", nargs="?", default="serve", choices=("serve", "probe", "dump"),
-                   help="serve: HTTP /metrics; probe: identity + word order check; "
+                   help="serve: HTTP /metrics; probe: check the controller is supported and guess "
+                        "the word order; "
                         "dump: register snapshot as a JSON test fixture")
     c = p.add_argument_group("controller")
     c.add_argument("--host", default=os.environ.get("DATAKOM_HOST"),
@@ -167,46 +170,41 @@ def serve(args, stop: threading.Event | None = None) -> int:
 
 
 # --- probe --------------------------------------------------------------------------------------
-def probe(args) -> int:
-    from .collector import decode_snapshot
-    from .sanity import check
+# identity, hardware and software version, then the 32-bit pairs that vote for the word order
+PROBE_PLAN = plan_blocks([IDENTITY_ADDR, HW_VERSION_ADDR, SW_VERSION_ADDR]
+                         + [a + i for _, a in WORD_ORDER_HINTS for i in (0, 1)])
 
+
+def probe(args) -> int:
+    """Check that the controller is a supported model and guess its word order."""
     reader = make_reader(args)
     try:
-        snap = reader.poll()
+        snap = reader.poll(PROBE_PLAN)
     finally:
         reader.close()
-    if not snap.connected and not snap.words:
-        print(f"cannot read {args.host}:{args.port} unit {args.unit_id}: "
-              f"{snap.failed_blocks[0][2] if snap.failed_blocks else 'no data'}")
-        return 2
-
     w = snap.words
     ident = w.get(IDENTITY_ADDR)
-    print(f"device identity : {ident if ident is None else hex(ident)} -> {model_name(ident)}"
-          "  (0xd300 D-300, 0xd500 D-500, 0xd700 D-700; D-509 MK3 undocumented - record it)")
-    print(f"hw / sw version : {w.get(HW_VERSION_ADDR)} / {w.get(SW_VERSION_ADDR)}")
-    print(f"status / mode   : {w.get(10604)} / {w.get(10605)}")
-    print(f"poll            : {snap.requests} requests, {len(snap.failed_blocks)} failed, "
-          f"{snap.duration:.3f}s")
-    for start, count, why in snap.failed_blocks:
-        print(f"  failed block {start}+{count}: {why}")
-    print("\n32-bit pairs (word@N, word@N+1):")
-    for name, addr in WORD_ORDER_HINTS:
-        print(f"  {name:15s} {addr}: {w.get(addr)!s:>6} {w.get(addr + 1)!s:>6}")
-    guess, votes = guess_word_order(w)
-    print()
-    if guess:
-        mark = "OK" if guess == args.word_order else "MISMATCH, set --word-order " + guess
-        print(f"word order looks like {guess} (votes {votes}); configured {args.word_order}: {mark}")
-    else:
-        print(f"cannot decide word order (votes {votes}) - start the engine or check mains voltage")
+    if ident is None:
+        why = snap.failed_blocks[0][2] if snap.failed_blocks else "no data"
+        print(f"cannot read {args.host}:{args.port} unit {args.unit_id}: {why}")
+        return 2
 
-    problems = check(decode_snapshot(w, args.word_order))
-    print("\nplausibility with configured word order:", "OK" if not problems else "")
-    for p in problems:
-        print("  " + p)
-    return 0 if not problems and not snap.failed_blocks else 1
+    supported = ident in KNOWN_MODELS
+    known = ", ".join(sorted(KNOWN_MODELS.values()))
+    name = f"{KNOWN_MODELS[ident]} (0x{ident:04x})" if supported else f"0x{ident:04x}"
+    print(f"controller: {name}, hw {w.get(HW_VERSION_ADDR)}, "
+          f"sw {w.get(SW_VERSION_ADDR)} - "
+          + ("supported" if supported else f"not supported (known: {known})"))
+
+    guess, votes = guess_word_order(w)
+    if guess is None:
+        print(f"word order: cannot decide (votes {votes}) - start the engine or apply mains voltage")
+        mismatch = False
+    else:
+        mismatch = guess != args.word_order
+        mark = f"MISMATCH, set --word-order {guess}" if mismatch else "OK"
+        print(f"word order: {guess} (votes {votes}); configured {args.word_order}: {mark}")
+    return 1 if not supported or mismatch else 0
 
 
 # --- dump ---------------------------------------------------------------------------------------

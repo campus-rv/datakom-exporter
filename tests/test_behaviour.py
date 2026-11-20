@@ -158,7 +158,8 @@ def test_probe_reports_model_and_word_order(make_controller, capsys):
     rc = cli.main(["probe", "--host", "127.0.0.1", "--port", str(sim.port)])
     out = capsys.readouterr().out
     assert "D-300" in out
-    assert "word order looks like low_first" in out and "OK" in out
+    assert "D-300 (0xd300)" in out and "supported" in out
+    assert "word order: low_first" in out and "OK" in out
     assert rc == 0
 
 
@@ -170,6 +171,29 @@ def test_probe_flags_word_order_mismatch(make_controller, capsys):
     out = capsys.readouterr().out
     assert "MISMATCH, set --word-order high_first" in out
     assert rc == 1
+
+
+def test_probe_rejects_unknown_controller(make_controller, capsys):
+    words = fixture_words(load_fixture(FIXTURES / "d300mk3_running_offload.json"))
+    words[10609] = 0x1234
+    sim = make_controller(words)
+    rc = cli.main(["probe", "--host", "127.0.0.1", "--port", str(sim.port)])
+    assert "not supported" in capsys.readouterr().out
+    assert rc == 1
+
+
+def test_probe_reads_only_identity_and_word_order_pairs(make_controller, monkeypatch, capsys):
+    from datakom_exporter.modbus import ControllerReader
+
+    sim = make_controller(fixture_words(load_fixture(FIXTURES / "d300mk3_running_offload.json")))
+    reqs = []
+    orig = ControllerReader.read_block
+    monkeypatch.setattr(ControllerReader, "read_block",
+                        lambda self, s, c: reqs.append((s, c)) or orig(self, s, c))
+    assert cli.main(["probe", "--host", "127.0.0.1", "--port", str(sim.port)]) == 0
+    assert reqs == cli.PROBE_PLAN and len(reqs) <= 3
+    out = capsys.readouterr().out
+    assert len(out.splitlines()) == 2
 
 
 def test_probe_unreachable(capsys):

@@ -16,7 +16,7 @@ import os
 import pytest
 from conftest import scrape
 
-from datakom_exporter.collector import DatakomCollector, decode_snapshot
+from datakom_exporter.collector import DatakomCollector
 from datakom_exporter.modbus import ControllerReader
 from datakom_exporter.registers import (
     ALARM_BLOCKS,
@@ -26,7 +26,6 @@ from datakom_exporter.registers import (
     guess_word_order,
     model_name,
 )
-from datakom_exporter.sanity import check
 
 HOST = os.environ.get("DATAKOM_LIVE_HOST")
 PORT = int(os.environ.get("DATAKOM_LIVE_PORT", "502"))
@@ -84,11 +83,6 @@ def test_word_order_matches_configuration(snap):
         pytest.skip("cannot decide word order: all hint pairs zero - "
                     "start the engine or make sure mains voltage is present")
     assert guess == ORDER, f"controller looks {guess}, deploy with DATAKOM_WORD_ORDER={guess}"
-
-
-def test_values_are_plausible(snap):
-    problems = check(decode_snapshot(snap.words, ORDER))
-    assert problems == [], "\n".join(problems)
 
 
 def test_single_register_and_16_register_reads(reader):

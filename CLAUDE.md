@@ -22,7 +22,6 @@ DATAKOM_LIVE_HOST=<ip> .venv/bin/pytest -m live -v -s   # лише з досту
   Новий регістр: `_reg("<group>", "genset_<name>_<unit>", addr, words, signed, divisor, help, **labels)`.
 - `modbus.py` — `ControllerReader`: обгортка pymodbus, тільки `read_holding_registers`.
 - `collector.py` — `DatakomCollector`: розклад груп, кеш, метрики.
-- `sanity.py` — межі правдоподібності (probe, фікстури, live-тести).
 - `cli.py` — `serve` / `probe` / `dump`, опції з `DATAKOM_*`.
 - `deploy/` — systemd-юніт, env-файл, `install.sh`.
 - `dashboards/generator.json` — дешборда Grafana (джерело; правити JSON напряму).
