@@ -71,11 +71,11 @@ def decode_snapshot(words: dict[int, int], word_order: str) -> dict[Key, int]:
 
 class DatakomCollector(Collector):
     def __init__(self, reader: ControllerReader, word_order: str = "low_first",
-                 min_poll_interval: float = 5.0, groups: dict[str, float] | None = None,
+                 cache_ttl: float = 10.0, groups: dict[str, float] | None = None,
                  clock=time.monotonic):
         self.reader = reader
         self.word_order = word_order
-        self.min_poll_interval = min_poll_interval
+        self.cache_ttl = cache_ttl
         self.groups = dict(DEFAULT_GROUP_INTERVALS if groups is None else groups)
         self.clock = clock
         self._group_addrs = {g: group_addresses(g) for g in self.groups}
@@ -98,7 +98,7 @@ class DatakomCollector(Collector):
                 if g not in self._group_read_at or now - self._group_read_at[g] >= interval]
 
     def snapshot(self) -> Snapshot:
-        """Poll the due groups unless the last poll is younger than min_poll_interval.
+        """Poll the due groups unless the last poll ended less than cache_ttl ago.
 
         Several Prometheus servers (HA pair) scraping at once hit the controller only once.
         """
@@ -109,7 +109,7 @@ class DatakomCollector(Collector):
         # cache) while this one is still building its exposition.
         with self._lock:
             now = self.clock()
-            if self._polled_at is None or now - self._polled_at >= self.min_poll_interval:
+            if self._polled_at is None or now - self._polled_at >= self.cache_ttl:
                 self._poll(now)
             return _View(self._snap, dict(self._words), dict(self._group_ok_ts), self.up)
 

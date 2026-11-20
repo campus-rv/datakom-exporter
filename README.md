@@ -12,8 +12,10 @@ Prometheus скрейпить його напряму (`/metrics`), без textf
   генератора і двигуна, мережа та прапорці стану (8 запитів), решта — рідше або
   взагалі ні; таблиці аварій — лише коли контролер сигналізує аварію (див. нижче).
 - Дешборда Grafana: [dashboards/generator.json](dashboards/generator.json).
-- Короткий кеш (`--min-poll-interval`, 5 с): кілька Prometheus (HA-пара) звертаються до
-  контролера один раз.
+- Кеш результату опитування (`--cache-ttl`, 10 с від кінця опитування): кілька Prometheus
+  (HA-пара), ручний `curl` чи скрейпи, що чекали на повільне опитування, звертаються до
+  контролера один раз. TTL, більший за інтервал скрейпу, опитує контролер рідше, ніж скрейпить
+  Prometheus.
 - На ФС нічого не пише: ні файлів метрик, ні стану, ні кешу, ні `__pycache__`; у журнал —
   лише старт і зміни стану контролера (доступний / недоступний).
 
@@ -98,11 +100,11 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 | `DATAKOM_PORT` | 502 | |
 | `DATAKOM_UNIT_ID` | 1 | Modbus address контролера |
 | `DATAKOM_WORD_ORDER` | `low_first` | порядок слів 32-бітних значень (D-300 MK3: `low_first`) |
-| `DATAKOM_TIMEOUT` | 2 | таймаут запиту, с |
+| `DATAKOM_TIMEOUT` | 2 | таймаут запиту, с. Відповідь у LAN ≈0.12 с, але 1 с на D-509 дає більше провалених опитувань (запізнілі відповіді) — див. [docs/GENERATOR_MODBUS_CONTEXT.md](docs/GENERATOR_MODBUS_CONTEXT.md) |
 | `DATAKOM_RETRIES` | 1 | повтори pymodbus на тому самому з'єднанні; якщо й вони без відповіді — ще один повтор після перепідключення |
 | `DATAKOM_REQUEST_DELAY` | 0 | пауза між блоками, с (якщо контролер не встигає) |
 | `DATAKOM_LISTEN` | `:9725` | адреса HTTP |
-| `DATAKOM_MIN_POLL_INTERVAL` | 5 | скрейпи в межах цього часу беруть попереднє опитування |
+| `DATAKOM_CACHE_TTL` | 10 | скільки секунд від кінця опитування скрейпи беруть його результат. Менше за інтервал скрейпу — лише об'єднує одночасні скрейпи; більше — контролер опитується рідше за скрейпи, а частина скрейпів віддає кеш (`genset_modbus_poll_timestamp_seconds` показує час справжнього опитування) |
 | `DATAKOM_GROUPS` | `genset=0,engine=0,mains=0,flags=0,alarms=60,counters=300,info=3600` | групи опитування та інтервали, с |
 | `DATAKOM_LOG_LEVEL` | WARNING | |
 
@@ -142,6 +144,10 @@ curl -s localhost:9725/metrics | grep genset_modbus_up
 > `live=<с>` на `genset=<с>,engine=<с>` у `DATAKOM_GROUPS`. Метрики не змінились, кількість
 > запитів теж; змінюється лише значення мітки `group` у
 > `genset_modbus_group_last_read_timestamp_seconds` (`genset`, `engine` замість `live`).
+>
+> **Оновлення з 0.4.x.** `DATAKOM_MIN_POLL_INTERVAL` / `--min-poll-interval` перейменовано на
+> `DATAKOM_CACHE_TTL` / `--cache-ttl` (стара назва — помилка запуску з підказкою); за
+> замовчуванням 10 с замість 5.
 
 Приклад: `DATAKOM_GROUPS=genset=0,engine=0,mains=0,flags=0,alarms=60,counters=300,info=3600,extended=600`.
 Лише мережа і стан AMF, без генератора й двигуна: `mains=0,flags=0` — 5 запитів на скрейп. Група, якої

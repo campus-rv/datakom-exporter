@@ -104,7 +104,7 @@ def test_poll_is_fast_enough_for_scraping(reader):
 
 
 def test_exporter_end_to_end(reader):
-    got = scrape(DatakomCollector(reader, word_order=ORDER, min_poll_interval=0))
+    got = scrape(DatakomCollector(reader, word_order=ORDER, cache_ttl=0))
     assert got["genset_modbus_up"] == 1
     assert got["genset_modbus_failed_blocks"] == 0
     for k in sorted(got):

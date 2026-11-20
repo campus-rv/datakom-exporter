@@ -51,7 +51,7 @@ GROUP_HELP = {
     "extended": "line-to-line voltages, reactive power, kVArh, hours/days since service, days to "
                 "service, mains kVAr/energy (zero with CTs on the alternator)",
 }
-# seconds between reads; 0 = on every poll (i.e. every scrape, limited by --min-poll-interval).
+# seconds between reads; 0 = on every poll (i.e. every scrape, limited by --cache-ttl).
 # Chosen from the 'Generator' dashboard (dashboards/generator.json): genset, engine and mains
 # values and the state flags every scrape, slow-changing counters and identity rarely. Groups
 # read in the same poll share blocks: genset + engine + mains + flags = 8 requests.

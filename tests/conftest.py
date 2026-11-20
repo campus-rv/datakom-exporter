@@ -60,13 +60,13 @@ def make_controller():
 def make_collector():
     readers = []
 
-    def _make(port, word_order="low_first", unit_id=1, min_poll_interval=0.0,
+    def _make(port, word_order="low_first", unit_id=1, cache_ttl=0.0,
               host="127.0.0.1", timeout=1.0, groups=ALL_GROUPS, clock=None):
         reader = ControllerReader(host, port=port, unit_id=unit_id, timeout=timeout, retries=0)
         readers.append(reader)
         kw = {"clock": clock} if clock else {}
         return DatakomCollector(reader, word_order=word_order, groups=groups,
-                                min_poll_interval=min_poll_interval, **kw)
+                                cache_ttl=cache_ttl, **kw)
 
     yield _make
     for r in readers:

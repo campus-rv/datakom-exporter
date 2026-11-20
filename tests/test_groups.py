@@ -127,7 +127,7 @@ def test_per_scrape_poll_is_small():
 def test_schedule(make_controller, make_collector):
     clock = Clock()
     sim = make_controller(running_words())
-    col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS, min_poll_interval=5,
+    col = make_collector(sim.port, groups=DEFAULT_GROUP_INTERVALS, cache_ttl=5,
                          clock=clock)
     reqs = record_requests(col)
 
@@ -145,7 +145,7 @@ def test_schedule(make_controller, make_collector):
     assert read == set(DEFAULT_GROUP_INTERVALS)
     assert len(reqs) == len(read_plan(NON_ALARM_DEFAULTS)) + len(read_plan(["alarms"]))
 
-    got, read = poll_at(2)                       # within min_poll_interval: cached
+    got, read = poll_at(2)                       # within cache_ttl: cached
     assert reqs == []
 
     got, read = poll_at(30)                      # per-scrape groups; tables wait for 60 s
@@ -247,7 +247,7 @@ def test_alarm_flag_triggers_immediate_table_read():
 
     clock = Clock()
     reader = FakeReader(rest_words())
-    col = DatakomCollector(reader, groups=DEFAULT_GROUP_INTERVALS, min_poll_interval=0, clock=clock)
+    col = DatakomCollector(reader, groups=DEFAULT_GROUP_INTERVALS, cache_ttl=0, clock=clock)
     scrape(col)
     assert alarm_requests(reader.requests) == []
 
@@ -427,7 +427,7 @@ def test_dashboard_panel_ids_unique():
     assert len(ids) == len(set(ids))
 
 
-def test_min_poll_interval_counts_from_the_end_of_a_slow_poll():
+def test_cache_ttl_counts_from_the_end_of_a_slow_poll():
     from datakom_exporter.collector import DatakomCollector
 
     clock = Clock()
@@ -438,7 +438,7 @@ def test_min_poll_interval_counts_from_the_end_of_a_slow_poll():
             return super().poll(plan)
 
     reader = SlowReader(rest_words())
-    col = DatakomCollector(reader, groups={"genset": 0, "engine": 0}, min_poll_interval=5, clock=clock)
+    col = DatakomCollector(reader, groups={"genset": 0, "engine": 0}, cache_ttl=5, clock=clock)
     scrape(col)
     reader.requests.clear()
     clock.t += 1                                          # queued scrape right after the poll
@@ -453,7 +453,7 @@ def test_unexpected_reader_error_does_not_fail_the_scrape():
         def poll(self, plan):
             raise ValueError("garbled frame")
 
-    col = DatakomCollector(BrokenReader({}), groups={"genset": 0, "engine": 0}, min_poll_interval=0, clock=Clock())
+    col = DatakomCollector(BrokenReader({}), groups={"genset": 0, "engine": 0}, cache_ttl=0, clock=Clock())
     got = scrape(col)
     assert got["genset_modbus_up"] == 0
     assert got["genset_modbus_failed_blocks"] == len(read_plan(["genset", "engine"]))
@@ -464,7 +464,7 @@ def test_poll_without_due_groups_keeps_the_last_state():
 
     clock = Clock()
     reader = FakeReader(rest_words())
-    col = DatakomCollector(reader, groups={"counters": 300}, min_poll_interval=0, clock=clock)
+    col = DatakomCollector(reader, groups={"counters": 300}, cache_ttl=0, clock=clock)
     assert scrape(col)["genset_modbus_up"] == 1
     col._snap.connected = False                           # last real poll failed
     clock.t += 10                                         # nothing due: controller not contacted
@@ -485,3 +485,22 @@ def test_bad_env_value_is_an_argparse_error(monkeypatch):
     with pytest.raises(SystemExit) as e:
         cli.build_parser().parse_args(["--host", "controller.example"])
     assert e.value.code == 2
+
+
+def test_cache_ttl_default_and_env(monkeypatch):
+    monkeypatch.delenv("DATAKOM_CACHE_TTL", raising=False)
+    assert cli.build_parser().parse_args([]).cache_ttl == 10
+    assert cli.build_parser().parse_args([]).timeout == 2
+    monkeypatch.setenv("DATAKOM_CACHE_TTL", "45")
+    assert cli.build_parser().parse_args([]).cache_ttl == 45
+
+
+@pytest.mark.parametrize("argv,env", [(["--min-poll-interval", "5"], {}),
+                                      ([], {"DATAKOM_MIN_POLL_INTERVAL": "5"})])
+def test_renamed_min_poll_interval_fails_with_a_hint(argv, env, monkeypatch, capsys):
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    with pytest.raises(SystemExit) as e:
+        cli.main(["--host", "controller.example", *argv])
+    assert e.value.code == 2
+    assert "renamed to" in capsys.readouterr().err

@@ -64,9 +64,9 @@ def test_recovers_after_controller_restart(make_collector):
         assert scrape(col)["genset_modbus_up"] == 1
 
 
-def test_min_poll_interval_shares_one_poll(make_controller, make_collector):
+def test_cache_ttl_shares_one_poll(make_controller, make_collector):
     sim = make_controller(rest_words())
-    col = make_collector(sim.port, min_poll_interval=60)
+    col = make_collector(sim.port, cache_ttl=60)
     a, b = scrape(col), scrape(col)
     assert a["genset_modbus_polls_total"] == b["genset_modbus_polls_total"] == 1
     # no alarm flag set in this fixture: the alarm tables are not read
@@ -75,7 +75,7 @@ def test_min_poll_interval_shares_one_poll(make_controller, make_collector):
 
 def test_concurrent_scrapes_poll_once(make_controller, make_collector):
     sim = make_controller(rest_words())
-    col = make_collector(sim.port, min_poll_interval=60)
+    col = make_collector(sim.port, cache_ttl=60)
     results = []
     threads = [threading.Thread(target=lambda: results.append(scrape(col))) for _ in range(5)]
     for t in threads:
@@ -123,7 +123,7 @@ def test_serving_scrapes_does_not_write_files(make_controller, monkeypatch):
     monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
     args = cli.build_parser().parse_args([
         "--host", "127.0.0.1", "--port", str(sim.port), "--listen", f"127.0.0.1:{port}",
-        "--min-poll-interval", "0"])
+        "--cache-ttl", "0"])
 
     from prometheus_client import REGISTRY
 
